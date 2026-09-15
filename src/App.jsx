@@ -189,9 +189,18 @@ const seedStaff = [
   { id: 12, code: "EKH-CEO-001", name: "Thando Mhango", dept: "ADM", role: "CEO", title: "Chief Executive Officer", status: "Active", startDate: new Date().toISOString().slice(0, 10) },
 ];
 
+const CONTENT_CALENDAR = [
+  { id: 1, day: "Monday", programme: "Mood: Ekhaya Edition", tagline: "What is your Monday mood?", plan: "Feature a motivational player quote, a training moment, the week's upcoming fixtures, or a message to supporters. Post a photo or video showing confidence, determination, happiness, or focus, and invite supporters to share their Monday mood.", hashtags: "#MondayMood, #HallamaEkhaya" },
+  { id: 2, day: "Tuesday", programme: "Ekhaya Rewind", tagline: "Players. Matches. Untold Stories.", plan: "A player rewatches a past Ekhaya match and pauses at key moments to explain what they were thinking, the coach's instructions, what went right or wrong, dressing-room emotions, and details supporters would not have known from watching the game. Example: Episode 01 - [Player Name] Rewatches Ekhaya vs [Opponent].", hashtags: "#EkhayaRewind, #HallamaEkhaya" },
+  { id: 3, day: "Wednesday", programme: "Ekhaya Connect", tagline: "Our Club. Our Fans. Our Community.", plan: "Connect directly with supporters and the wider community through fan interactions, school or university visits, hospital visits, community outreach, street interviews, competitions, merchandise promotion, and supporter meet-ups. Create TikTok, Facebook, and Instagram content from these activities.", hashtags: "#EkhayaConnect, #HallamaEkhaya" },
+  { id: 4, day: "Thursday", programme: "Know Your Player", tagline: "Beyond the shirt. Meet the player.", plan: "Introduce supporters to an Ekhaya player beyond football. For the first episode, feature a player who is confident, funny, or already popular with supporters. A strong personality will establish what audiences should expect from the series.", hashtags: "#KnowYourPlayer, #HallamaEkhaya" },
+  { id: 5, day: "Friday", programme: "Ekhaya Drip Friday", tagline: "Wear Ekhaya. Represent the club.", plan: "Dedicate Friday to recurring merchandise content instead of posting products randomly. Rotate the focus weekly: supporters wearing Ekhaya outfits, a featured product, or short fashion-style and humorous videos with players, fans, staff, sponsors, and partners wearing Ekhaya merchandise.", hashtags: "#EkhayaDripFriday, #HallamaEkhaya" },
+  { id: 6, day: "Saturday", programme: "Ekhaya Matchday", tagline: "The Energy. The Action. The Ekhaya Experience.", plan: "Capture the complete matchday experience from preparation to the final whistle. Include player arrivals, dressing-room preparations, warm-ups, supporter reactions, match highlights, celebrations, the final score, and brief post-match interviews. When there is no match, feature selected player photographs.", hashtags: "#EkhayaMatchday, #HallamaEkhaya" },
+  { id: 7, day: "Sunday", programme: "Ekhaya Weekly Wrap-Up", tagline: "The Week That Was. The Ekhaya Journey.", plan: "Summarise the club's activities from the previous week, including training highlights, match results, player achievements, community engagements, merchandise moments, and the best photographs or videos. Preview upcoming fixtures, club activities, and important announcements for the new week.", hashtags: "#EkhayaWeeklyWrap, #ThisWeekAtEkhaya, #HallamaEkhaya" },
+];
+
 const seedHostels = [
   { id: 1, code: "HSE-001", name: "Main House (Reserve)", location: "Ekhaya Grounds", warden: "House Mother" },
-  { id: 2, code: "HSE-002", name: "House 3 (Youth)", location: "Ekhaya Grounds", warden: "House Parent" },
 ];
 
 const seedFoodSchedule = [
@@ -4842,6 +4851,22 @@ function deleteAdjustment(code) {
                     </div>
                     <PrimaryButton onClick={() => setDrawer({ type: "sponsor" })}><Plus size={14} style={{ verticalAlign: -2 }} /> Add Sponsor</PrimaryButton>
                   </div>
+                  <Section title="Weekly Content Calendar">
+                    <p style={{ fontSize: 12.5, color: "#948d76", marginTop: 0 }}>
+                      A recurring seven-day social media plan for consistent fan engagement, community connection, merchandise promotion, sponsor visibility, and club storytelling.
+                    </p>
+                    <Table
+                      columns={[
+                        { key: "day", label: "Day", render: (r) => <span style={{ fontWeight: 700, fontFamily: "Oswald, sans-serif" }}>{r.day}</span> },
+                        { key: "programme", label: "Programme" },
+                        { key: "tagline", label: "Tagline", render: (r) => <span style={{ fontStyle: "italic", color: "#6b6552" }}>{r.tagline}</span> },
+                        { key: "plan", label: "Content Plan" },
+                        { key: "hashtags", label: "Hashtags", render: (r) => <span style={{ color: T.gold }}>{r.hashtags}</span> },
+                      ]}
+                      rows={CONTENT_CALENDAR}
+                      empty="No content calendar loaded."
+                    />
+                  </Section>
                   <Section title="Sponsorship Agreements">
                     <Table
                       columns={[
