@@ -87,8 +87,8 @@ describe("RBAC canAccess", () => {
     expect(canAccess(mk("FINANCE", "FIN"), "inventory")).toBe(false);
   });
 
-  it("FINANCE can access finance", () => {
-    expect(canAccess(mk("FINANCE", "FIN"), "finance")).toBe(true);
+  it("FINANCE CANNOT access finance (departments locked to executives)", () => {
+    expect(canAccess(mk("FINANCE", "FIN"), "finance")).toBe(false);
   });
 
   it("STAFF can access dashboard", () => {
@@ -99,20 +99,32 @@ describe("RBAC canAccess", () => {
     expect(canAccess(mk("STAFF", "INV"), "superadmin")).toBe(false);
   });
 
-  it("TEAM can access players", () => {
-    expect(canAccess(mk("TEAM", "SEN"), "players")).toBe(true);
+  it("TEAM CANNOT access players (departments locked to executives)", () => {
+    expect(canAccess(mk("TEAM", "SEN"), "players")).toBe(false);
   });
 
-  it("HOSTEL can access hostel", () => {
-    expect(canAccess(mk("HOSTEL", "ADM"), "hostel")).toBe(true);
+  it("HOSTEL CANNOT access hostel (departments locked to executives)", () => {
+    expect(canAccess(mk("HOSTEL", "ADM"), "hostel")).toBe(false);
   });
 
-  it("INVENTORY can access staffequipment", () => {
-    expect(canAccess(mk("INVENTORY", "INV"), "staffequipment")).toBe(true);
+  it("INVENTORY CANNOT access staffequipment (departments locked to executives)", () => {
+    expect(canAccess(mk("INVENTORY", "INV"), "staffequipment")).toBe(false);
   });
 
-  it("CEO can access fleet", () => {
-    expect(canAccess(mk("CEO", "ADM"), "fleet")).toBe(true);
+  it("ADMIN cannot access administration anymore", () => {
+    expect(canAccess(mk("ADMIN", "ADM"), "administration")).toBe(false);
+  });
+
+  it("ADMIN can still see dashboard and notifications", () => {
+    expect(canAccess(mk("ADMIN", "ADM"), "dashboard")).toBe(true);
+    expect(canAccess(mk("ADMIN", "ADM"), "notifications")).toBe(true);
+  });
+
+  it("CEO can access every department module", () => {
+    const ceo = mk("CEO", "ADM");
+    ["administration", "finance", "marketing", "fleet", "team", "inventory", "players", "hostel", "matchday", "reports", "audit"].forEach((m) => {
+      expect(canAccess(ceo, m)).toBe(true);
+    });
   });
 
   it("returns false for unknown module", () => {
@@ -133,12 +145,9 @@ describe("canViewDept", () => {
     expect(canViewDept({ role: "CEO", dept: "ADM" }, "FIN")).toBe(true);
   });
 
-  it("FINANCE cannot see INVENTORY", () => {
+  it("FINANCE CANNOT see any department (locked to executives)", () => {
     expect(canViewDept({ role: "FINANCE", dept: "FIN" }, "INV")).toBe(false);
-  });
-
-  it("FINANCE can see FIN", () => {
-    expect(canViewDept({ role: "FINANCE", dept: "FIN" }, "FIN")).toBe(true);
+    expect(canViewDept({ role: "FINANCE", dept: "FIN" }, "FIN")).toBe(false);
   });
 
   it("returns false for null", () => {
@@ -160,10 +169,10 @@ describe("permission helpers", () => {
     expect(canDelete(null)).toBe(false);
   });
 
-  it("canSeeSalaries: SUPERADMIN/CEO/FINANCE", () => {
+  it("canSeeSalaries: SUPERADMIN/CEO only", () => {
     expect(canSeeSalaries(sup)).toBe(true);
     expect(canSeeSalaries(ceo)).toBe(true);
-    expect(canSeeSalaries(fin)).toBe(true);
+    expect(canSeeSalaries(fin)).toBe(false);
     expect(canSeeSalaries(staff)).toBe(false);
   });
 
@@ -173,10 +182,11 @@ describe("permission helpers", () => {
     expect(canActAs(fin)).toBe(false);
   });
 
-  it("canApprove: different person, not STAFF", () => {
-    expect(canApprove({ staffCode: "A", role: "ADMIN" }, "B")).toBe(true);
+  it("canApprove: SUPERADMIN/CEO only", () => {
+    expect(canApprove({ staffCode: "A", role: "CEO" }, "B")).toBe(true);
+    expect(canApprove({ staffCode: "A", role: "ADMIN" }, "B")).toBe(false);
     expect(canApprove({ staffCode: "A", role: "STAFF" }, "B")).toBe(false);
-    expect(canApprove({ staffCode: "A", role: "FINANCE" }, "A")).toBe(false); // self
+    expect(canApprove({ staffCode: "A", role: "SUPERADMIN" }, "A")).toBe(false); // self
   });
 });
 

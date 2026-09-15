@@ -52,13 +52,19 @@ const SEED_ACCOUNTS = [
     code: "ACC-SEN-001", staffCode: "EKH-SEN-001", name: "Davie Kamanga", email: "davie@ekhayafc.com",
     role: "TEAM", dept: "SEN", active: true, mustChangePassword: true,
     salt: "e5a3f119c42f77bd24ccea0c8fa123e9", iterations: 150000,
-    hash: "a1f7c9d4a86e5b2ea41d93f8c6b54d017e2b30fa83c9a665d4f1b8c29e07a6d3",
+    hash: "29c5e41e5d985ef8ae2f4abb2a4910dd71fa40c22f35c313d2eb3f5d12bb0ea3",
   },
   {
     code: "ACC-WOM-001", staffCode: "EKH-WOM-001", name: "Linda Tembo", email: "linda@ekhayafc.com",
     role: "TEAM", dept: "WOM", active: true, mustChangePassword: true,
     salt: "f41cd6a3b2e57890d1c44def7a2b8c9e", iterations: 150000,
-    hash: "b67d2e81c453a90f17c6d84b5e29fa03d8c1a6e7b45f0c2d9a806e3f14b57c9d",
+    hash: "bb90b90917b57c66a8e7f9b7642911d03457f21b1c7fea772f07b0e995dd854a",
+  },
+  {
+    code: "ACC-CEO-001", staffCode: "EKH-CEO-001", name: "Thando Mhango", email: "thando@ekhayafc.com",
+    role: "CEO", dept: "ADM", active: true, mustChangePassword: true,
+    salt: "cf2413aaebb70349eea20ff6e813eb7f", iterations: 150000,
+    hash: "160e8b245b3adadc423028545020c253b15384687153ad152b337d5087178370",
   },
 ];
 
@@ -180,6 +186,7 @@ const seedStaff = [
   { id: 9, code: "EKH-FIN-001", name: "Finance Officer", dept: "FIN", role: "Finance Officer", title: "Finance Officer", status: "Active", startDate: "2024-01-01" },
   { id: 10, code: "EKH-RES-001", name: "Reserve Team Manager", dept: "RES", role: "Team Manager", title: "Reserve Team Manager", status: "Active", startDate: "2024-01-01" },
   { id: 11, code: "EKH-YTH-001", name: "Youth Team Manager", dept: "YTH", role: "Team Manager", title: "Youth Team Manager", status: "Active", startDate: "2024-01-01" },
+  { id: 12, code: "EKH-CEO-001", name: "Thando Mhango", dept: "ADM", role: "CEO", title: "Chief Executive Officer", status: "Active", startDate: new Date().toISOString().slice(0, 10) },
 ];
 
 const seedHostels = [
@@ -4411,7 +4418,7 @@ function deleteAdjustment(code) {
           {tab === "dashboard" && (() => {
               const pct = (p) => Math.max(1, Math.round((p / Math.max(1, totalPlayers)) * 100));
               const wk = { display: "flex", alignItems: "center", gap: 8 };
-              const isLeader = ["SUPERADMIN", "CEO", "ADMIN"].includes(account.role);
+              const isLeader = ["SUPERADMIN", "CEO"].includes(account.role);
               const myTeams = seedTeams.filter((t) => canViewDept(account, t.dept));
               const squadTeams = myTeams.length > 0 ? myTeams : seedTeams;
               return (
@@ -4931,7 +4938,7 @@ function deleteAdjustment(code) {
                   </div>
                   <Section title={`Players & Contracts (${filtered.length})`}>
                     <p style={{ fontSize: 12.5, color: "#6b6552", marginTop: 0 }}>
-                      Active registered players across all squads. Salary amounts are masked by default for privacy — only Finance, CEO and Superadmin may reveal them.
+                      Active registered players across all squads. Salary amounts are masked by default for privacy — only the CEO and Superadmin may reveal them.
                     </p>
                     <Table
                       columns={[
@@ -5378,7 +5385,7 @@ function deleteAdjustment(code) {
                     <StatCard label="Pending approval" value={pendingFinance} />
                   </div>
                 ) : (
-                  <p style={{ fontSize: 13, color: "#6b6552", margin: 0 }}>Restricted — only Finance, CEO and Superadmin may view financial figures.</p>
+                  <p style={{ fontSize: 13, color: "#6b6552", margin: 0 }}>Restricted — only the CEO and Superadmin may view financial figures.</p>
                 )}
               </Section>
               <Section title="Budget Report (2026)">
