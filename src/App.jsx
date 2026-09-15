@@ -65,6 +65,7 @@ const SEED_ACCOUNTS = [
 // ---------------------------------------------------------------
 // Design tokens (Ekhaya FC — ink & gold)
 // ---------------------------------------------------------------
+const LOGO_URL = `${import.meta.env.BASE_URL}ekhaya-logo.jpg`;
 const T = {
   ink: "#15140f",
   gold: "#c9982e",
@@ -4237,11 +4238,11 @@ function deleteAdjustment(code) {
 
   if (!authenticated()) {
     return (
-      <div style={{ fontFamily: "Inter, sans-serif", background: "linear-gradient(rgba(21,20,15,0.78), rgba(21,20,15,0.88)), url('/ekhaya-logo.jpg') center/cover no-repeat, #15140f", backgroundAttachment: "fixed", minHeight: "100vh", color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
+<div style={{ fontFamily: "Inter, sans-serif", background: `linear-gradient(rgba(21,20,15,0.78), rgba(21,20,15,0.88)), ${LOGO_URL} center/cover no-repeat, #15140f`, backgroundAttachment: "fixed", minHeight: "100vh", color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
         <style>{fontImport}</style>
         <div style={{ width: 380, maxWidth: "100%", background: "rgba(255,251,240,0.96)", borderRadius: 16, padding: 34, boxShadow: "0 24px 60px rgba(0,0,0,0.45)", border: "1px solid rgba(232,207,143,0.5)" }}>
           <div style={{ textAlign: "center", marginBottom: 22 }}>
-            <img src="/ekhaya-logo.jpg" alt="Ekhaya FC" style={{ width: 92, height: 92, borderRadius: "50%", objectFit: "cover", border: "3px solid rgba(201,152,46,0.55)", boxShadow: "0 6px 18px rgba(0,0,0,0.25)" }} />
+            <img src={LOGO_URL} alt="Ekhaya FC" style={{ width: 92, height: 92, borderRadius: "50%", objectFit: "cover", border: "3px solid rgba(201,152,46,0.55)", boxShadow: "0 6px 18px rgba(0,0,0,0.25)" }} />
             <div style={{ fontFamily: "Oswald, sans-serif", fontSize: 23, color: T.ink, fontWeight: 700, marginTop: 12, letterSpacing: 1 }}>EKHAYA FC</div>
             <div style={{ fontSize: 12.5, color: "#6b6552", marginTop: 4 }}>Management System — The Pride of Malawi</div>
           </div>
@@ -4315,14 +4316,14 @@ function deleteAdjustment(code) {
 
   return (
     <ErrorBoundary>
-      <div style={{ fontFamily: "Inter, sans-serif", background: "linear-gradient(rgba(250,246,236,0.82), rgba(250,246,236,0.9)), url('/ekhaya-logo.jpg') center/cover no-repeat fixed, #faf6ec", minHeight: "100vh", color: T.text, display: "flex" }}>
+      <div style={{ fontFamily: "Inter, sans-serif", background: `linear-gradient(rgba(250,246,236,0.82), rgba(250,246,236,0.9)), ${LOGO_URL} center/cover no-repeat fixed, #faf6ec`, minHeight: "100vh", color: T.text, display: "flex" }}>
         <style>{fontImport}</style>
 
         {/* Sidebar — frosted glass over the club crest */}
       <div style={{ width: 226, background: "rgba(21,20,15,0.55)", backdropFilter: "blur(18px)", WebkitBackdropFilter: "blur(18px)", color: "#fff", display: "flex", flexDirection: "column", flexShrink: 0, height: "100vh", position: "sticky", top: 0, borderRight: "1px solid rgba(255,255,255,0.12)", boxShadow: "2px 0 24px rgba(0,0,0,0.18)" }}>
         <div style={{ padding: "20px 18px 16px", borderBottom: "1px solid rgba(255,255,255,0.1)" }}>
           <div style={{ display: "flex", alignItems: "center", gap: 11 }}>
-            <img src="/ekhaya-logo.jpg" alt="Ekhaya FC" style={{ width: 44, height: 44, borderRadius: "50%", objectFit: "cover", border: "2px solid rgba(232,207,143,0.65)", boxShadow: "0 4px 12px rgba(0,0,0,0.4)" }} />
+            <img src={LOGO_URL} alt="Ekhaya FC" style={{ width: 44, height: 44, borderRadius: "50%", objectFit: "cover", border: "2px solid rgba(232,207,143,0.65)", boxShadow: "0 4px 12px rgba(0,0,0,0.4)" }} />
             <div>
               <div style={{ fontFamily: "Oswald, sans-serif", fontSize: 18, fontWeight: 600, color: T.goldSoft, letterSpacing: 0.5 }}>EKHAYA FC</div>
               <div style={{ fontSize: 11, color: "#d8d2bf", marginTop: 1, letterSpacing: 0.3 }}>All-in-One System</div>
@@ -6105,7 +6106,7 @@ function ForcedPasswordScreen({ account, onSubmit, onLogout }) {
   const [confirm, setConfirm] = useState("");
   const [error, setError] = useState("");
   return (
-    <div style={{ fontFamily: "Inter, sans-serif", background: "linear-gradient(rgba(21,20,15,0.78), rgba(21,20,15,0.88)), url('/ekhaya-logo.jpg') center/cover no-repeat, #15140f", backgroundAttachment: "fixed", minHeight: "100vh", color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
+    <div style={{ fontFamily: "Inter, sans-serif", background: `linear-gradient(rgba(21,20,15,0.78), rgba(21,20,15,0.88)), ${LOGO_URL} center/cover no-repeat, #15140f`, backgroundAttachment: "fixed", minHeight: "100vh", color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
       <style>{fontImport}</style>
       <div style={{ width: 380, maxWidth: "100%", background: "rgba(255,251,240,0.96)", borderRadius: 16, padding: 34, boxShadow: "0 24px 60px rgba(0,0,0,0.45)", border: "1px solid rgba(232,207,143,0.5)" }}>
         <div style={{ textAlign: "center", marginBottom: 18 }}>
