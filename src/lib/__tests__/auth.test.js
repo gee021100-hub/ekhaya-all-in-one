@@ -83,12 +83,12 @@ describe("RBAC canAccess", () => {
     });
   });
 
-  it("FINANCE cannot access inventory", () => {
+  it("FINANCE cannot access inventory (different department)", () => {
     expect(canAccess(mk("FINANCE", "FIN"), "inventory")).toBe(false);
   });
 
-  it("FINANCE CANNOT access finance (departments locked to executives)", () => {
-    expect(canAccess(mk("FINANCE", "FIN"), "finance")).toBe(false);
+  it("FINANCE CAN access finance (own department)", () => {
+    expect(canAccess(mk("FINANCE", "FIN"), "finance")).toBe(true);
   });
 
   it("STAFF can access dashboard", () => {
@@ -99,20 +99,20 @@ describe("RBAC canAccess", () => {
     expect(canAccess(mk("STAFF", "INV"), "superadmin")).toBe(false);
   });
 
-  it("TEAM CANNOT access players (departments locked to executives)", () => {
-    expect(canAccess(mk("TEAM", "SEN"), "players")).toBe(false);
+  it("TEAM CAN access players (own department)", () => {
+    expect(canAccess(mk("TEAM", "SEN"), "players")).toBe(true);
   });
 
-  it("HOSTEL CANNOT access hostel (departments locked to executives)", () => {
-    expect(canAccess(mk("HOSTEL", "ADM"), "hostel")).toBe(false);
+  it("HOSTEL CAN access hostel (own department)", () => {
+    expect(canAccess(mk("HOSTEL", "ADM"), "hostel")).toBe(true);
   });
 
-  it("INVENTORY CANNOT access staffequipment (departments locked to executives)", () => {
-    expect(canAccess(mk("INVENTORY", "INV"), "staffequipment")).toBe(false);
+  it("INVENTORY CAN access staffequipment (own department)", () => {
+    expect(canAccess(mk("INVENTORY", "INV"), "staffequipment")).toBe(true);
   });
 
-  it("ADMIN cannot access administration anymore", () => {
-    expect(canAccess(mk("ADMIN", "ADM"), "administration")).toBe(false);
+  it("ADMIN can access administration (own department)", () => {
+    expect(canAccess(mk("ADMIN", "ADM"), "administration")).toBe(true);
   });
 
   it("ADMIN can still see dashboard and notifications", () => {
@@ -145,9 +145,9 @@ describe("canViewDept", () => {
     expect(canViewDept({ role: "CEO", dept: "ADM" }, "FIN")).toBe(true);
   });
 
-  it("FINANCE CANNOT see any department (locked to executives)", () => {
+  it("FINANCE sees own department only", () => {
     expect(canViewDept({ role: "FINANCE", dept: "FIN" }, "INV")).toBe(false);
-    expect(canViewDept({ role: "FINANCE", dept: "FIN" }, "FIN")).toBe(false);
+    expect(canViewDept({ role: "FINANCE", dept: "FIN" }, "FIN")).toBe(true);
   });
 
   it("returns false for null", () => {
@@ -169,10 +169,10 @@ describe("permission helpers", () => {
     expect(canDelete(null)).toBe(false);
   });
 
-  it("canSeeSalaries: SUPERADMIN/CEO only", () => {
+  it("canSeeSalaries: SUPERADMIN/CEO/FINANCE", () => {
     expect(canSeeSalaries(sup)).toBe(true);
     expect(canSeeSalaries(ceo)).toBe(true);
-    expect(canSeeSalaries(fin)).toBe(false);
+    expect(canSeeSalaries(fin)).toBe(true);
     expect(canSeeSalaries(staff)).toBe(false);
   });
 
@@ -182,9 +182,9 @@ describe("permission helpers", () => {
     expect(canActAs(fin)).toBe(false);
   });
 
-  it("canApprove: SUPERADMIN/CEO only", () => {
+  it("canApprove: anyone except STAFF, and not self", () => {
     expect(canApprove({ staffCode: "A", role: "CEO" }, "B")).toBe(true);
-    expect(canApprove({ staffCode: "A", role: "ADMIN" }, "B")).toBe(false);
+    expect(canApprove({ staffCode: "A", role: "ADMIN" }, "B")).toBe(true);
     expect(canApprove({ staffCode: "A", role: "STAFF" }, "B")).toBe(false);
     expect(canApprove({ staffCode: "A", role: "SUPERADMIN" }, "A")).toBe(false); // self
   });

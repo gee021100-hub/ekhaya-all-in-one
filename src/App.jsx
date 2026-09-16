@@ -9,6 +9,7 @@ import { calculateAge, remainingMonths, todayISO } from "./lib/dates.js";
 import { enoughStock, validateFinanceTx, validateStockIn, validateStockOut, validateItem, validateStaff, required, positiveInteger, nonNegativeNumber, emailValid, date as isValidDate } from "./lib/validation.js";
 import { approvedIncome, approvedExpense, approvedTransfer, pendingFinanceCount } from "./lib/finance.js";
 import { appendEntry, verifyChain, smartLog } from "./lib/audit.js";
+import { loadOrgState, saveOrgState, cloudSignIn, cloudSignUp, cloudSignOut, cloudUpdatePassword, onAuthChange, getCurrentUser, isCloudConfigured } from "./lib/backend.js";
 
 class ErrorBoundary extends Component {
   constructor(props) {
@@ -3586,6 +3587,8 @@ export default function EkhayaSystem() {
   const [revealSalaries, setRevealSalaries] = useState(false);
   const [appLog, setAppLog] = useState(() => loadPersisted("appLog", []));
   const [lastBackupAt, setLastBackupAt] = useState(() => loadPersisted("lastBackupAt", null));
+  const [cloudEmail, setCloudEmail] = useState(null);
+  const [cloudBusy, setCloudBusy] = useState(false);
   const loginEmailRef = useRef(null);
   const loginPassRef = useRef(null);
 
@@ -3652,6 +3655,48 @@ export default function EkhayaSystem() {
       document.removeEventListener("visibilitychange", onUnload);
     };
   }, [flushPersist]);
+
+  const pushCloud = useCallback(async () => {
+    if (!cloudEmail) return;
+    try {
+      const snap = {
+        version: DATA_VERSION,
+        exportedAt: new Date().toISOString(),
+        data: {
+          staff, items, stockIn, stockOut, transfers, adjustments,
+          staffEquipment, financeTx, vehicles, auditLog, notifications,
+          counters, deptSeq, accounts, players, hostelResidents, attendanceLog,
+          incidents, foodSchedule, trips, fuelLog, sponsors, risks, fixtures,
+          appLog, lastBackupAt,
+        },
+      };
+      await saveOrgState(snap);
+    } catch (e) {
+      console.warn("Cloud push failed:", e);
+    }
+  }, [cloudEmail, staff, items, stockIn, stockOut, transfers, adjustments,
+    staffEquipment, financeTx, vehicles, auditLog, notifications,
+    counters, deptSeq, accounts, players, hostelResidents, attendanceLog,
+    incidents, foodSchedule, trips, fuelLog, sponsors, risks, fixtures,
+    appLog, lastBackupAt]);
+
+  // Cloud: debounced push to Supabase when authenticated
+  useEffect(() => {
+    if (!cloudEmail) return;
+    const t = setTimeout(() => { pushCloud(); }, 2000);
+    return () => clearTimeout(t);
+  }, [pushCloud, cloudEmail]);
+
+  // Supabase auth state listener (auto-hydrate on reload if cloud session exists)
+  useEffect(() => {
+    if (!isCloudConfigured()) return;
+    let mounted = true;
+    getCurrentUser().then(u => { if (mounted) setCloudEmail(u?.email || null); });
+    const { data: sub } = onAuthChange((_evt, sess) => {
+      setCloudEmail(sess?.user?.email || null);
+    });
+    return () => { mounted = false; sub?.subscription?.unsubscribe?.(); };
+  }, []);
 
   // Migrate legacy audit rows (pre-chain) into a verified chain, and log
   // unhandled errors to a persisted ring buffer for diagnostics.
@@ -3772,6 +3817,77 @@ export default function EkhayaSystem() {
       setLoginError(`Account temporarily locked. Try again after ${new Date(lockUntil).toLocaleTimeString()}.`);
       return;
     }
+
+    // 1. Try cloud (Supabase) first if configured
+    if (isCloudConfigured()) {
+      cloudSignIn(email, password)
+        .then(async (user) => {
+          // Cloud sign-in succeeded — find matching account in org state or local
+          const snap = await loadOrgState().catch(() => null);
+          const currentAccounts = (snap && snap.data?.accounts) || accounts;
+          const found = currentAccounts.find((a) => a.email && a.email.toLowerCase() === String(email).trim().toLowerCase());
+          if (!found) {
+            setLoginError(`Cloud login OK, but no Ekhaya role linked to ${email}. Ask Superadmin to create your account.`);
+            await cloudSignOut();
+            return;
+          }
+          if (!found.active) { setLoginError("This account has been deactivated."); return; }
+          // Hydrate org state if it exists
+          if (snap && snap.data) {
+            setStaff(snap.data.staff ?? seedStaff);
+            setItems(snap.data.items ?? seedItems);
+            setStockIn(snap.data.stockIn ?? []);
+            setStockOut(snap.data.stockOut ?? []);
+            setTransfers(snap.data.transfers ?? []);
+            setAdjustments(snap.data.adjustments ?? []);
+            setStaffEquipment(snap.data.staffEquipment ?? []);
+            setFinanceTx(snap.data.financeTx ?? []);
+            setVehicles(snap.data.vehicles ?? []);
+            setAuditLog(snap.data.auditLog ?? []);
+            setNotifications(snap.data.notifications ?? []);
+            setCounters(snap.data.counters ?? { si: 0, so: 0, tr: 0, adj: 0, eq: 0, fin: 0 });
+            setDeptSeq(snap.data.deptSeq ?? { INV: 0, FIN: 1, ADM: 1, SEN: 1, MKT: 0, FLT: 1, WOM: 1, RES: 1, YTH: 1, HOS: 3 });
+            setAccounts(snap.data.accounts ?? SEED_ACCOUNTS);
+            setPlayers(snap.data.players ?? []);
+            setHostelResidents(snap.data.hostelResidents ?? []);
+            setAttendanceLog(snap.data.attendanceLog ?? []);
+            setIncidents(snap.data.incidents ?? []);
+            setFoodSchedule(snap.data.foodSchedule ?? []);
+            setTrips(snap.data.trips ?? []);
+            setFuelLog(snap.data.fuelLog ?? []);
+            setSponsors(snap.data.sponsors ?? []);
+            setRisks(snap.data.risks ?? []);
+            setFixtures(snap.data.fixtures ?? []);
+            setAppLog(snap.data.appLog ?? []);
+            setLastBackupAt(snap.data.lastBackupAt ?? null);
+          } else if (financeTx.length > 50 || staff.length > 5) {
+            // First cloud login from a data-rich device → auto-migrate local state
+            const snap = {
+              version: DATA_VERSION,
+              exportedAt: new Date().toISOString(),
+              data: {
+                staff, items, stockIn, stockOut, transfers, adjustments,
+                staffEquipment, financeTx, vehicles, auditLog, notifications,
+                counters, deptSeq, accounts, players, hostelResidents, attendanceLog,
+                incidents, foodSchedule, trips, fuelLog, sponsors, risks, fixtures,
+                appLog, lastBackupAt,
+              },
+            };
+            try { await saveOrgState(snap); } catch (e) { console.warn("Auto-migrate failed:", e); }
+          }
+          setCloudEmail(user.email);
+          loginSuccess(found, remember, "cloud");
+        })
+        .catch(() => {
+          // Cloud failed (invalid creds / no user) → fall back to local PBKDF2 login
+          doLocalLogin(email, password, remember);
+        });
+    } else {
+      doLocalLogin(email, password, remember);
+    }
+  }
+
+  function doLocalLogin(email, password, remember) {
     const found = accounts.find((a) => a.email && a.email.toLowerCase() === String(email).trim().toLowerCase());
     if (!found || !verifyPassword(password || "", found)) {
       const attempts = failedAttempts + 1;
@@ -3824,16 +3940,22 @@ export default function EkhayaSystem() {
     setSession(null);
     setActingAs(staff[0] && staff[0].code);
     savePersisted("session", null);
+    if (cloudEmail) cloudSignOut();
+    setCloudEmail(null);
     setTimeout(() => { if (flushRef.current) flushRef.current(); }, 60);
   }
 
   function changePassword(current, next) {
     if (!account) return;
-    if (!verifyPassword(current || "", account)) { alert("Current password is incorrect."); return; }
+    // For cloud-authed users, skip local hash verification (Supabase already validated session)
+    if (!cloudEmail) {
+      if (!verifyPassword(current || "", account)) { alert("Current password is incorrect."); return; }
+    }
     if ((next || "").length < 8) { alert("New password must be at least 8 characters."); return; }
     const updated = hashPassword(next);
     setAccounts((prev) => prev.map((a) => a.code === account.code ? { ...a, ...updated, mustChangePassword: false } : a));
     setSession((s) => (s ? { ...s } : s));
+    if (cloudEmail) cloudUpdatePassword(next).catch(e => console.warn("Cloud password sync failed:", e));
     log("Password changed", "account", account.code, "Password updated");
     alert("Password updated.");
   }
@@ -4963,7 +5085,7 @@ function deleteAdjustment(code) {
                   </div>
                   <Section title={`Players & Contracts (${filtered.length})`}>
                     <p style={{ fontSize: 12.5, color: "#6b6552", marginTop: 0 }}>
-                      Active registered players across all squads. Salary amounts are masked by default for privacy — only the CEO and Superadmin may reveal them.
+                      Active registered players across all squads. Salary amounts are masked by default for privacy — only Finance, CEO and Superadmin may reveal them.
                     </p>
                     <Table
                       columns={[
@@ -5410,7 +5532,7 @@ function deleteAdjustment(code) {
                     <StatCard label="Pending approval" value={pendingFinance} />
                   </div>
                 ) : (
-                  <p style={{ fontSize: 13, color: "#6b6552", margin: 0 }}>Restricted — only the CEO and Superadmin may view financial figures.</p>
+                  <p style={{ fontSize: 13, color: "#6b6552", margin: 0 }}>Restricted — only Finance, CEO and Superadmin may view financial figures.</p>
                 )}
               </Section>
               <Section title="Budget Report (2026)">
@@ -5680,6 +5802,66 @@ function deleteAdjustment(code) {
                     };
                     input.click();
                   }}><Upload size={14} style={{ verticalAlign: -2 }} /> Import backup</GhostButton>
+                  {isCloudConfigured() && (
+                    <>
+                      <PrimaryButton disabled={cloudBusy} onClick={async () => {
+                        setCloudBusy(true);
+                        try {
+                          const snap = {
+                            version: DATA_VERSION,
+                            exportedAt: new Date().toISOString(),
+                            data: {
+                              staff, items, stockIn, stockOut, transfers, adjustments,
+                              staffEquipment, financeTx, vehicles, auditLog, notifications,
+                              counters, deptSeq, accounts, players, hostelResidents, attendanceLog,
+                              incidents, foodSchedule, trips, fuelLog, sponsors, risks, fixtures,
+                              appLog, lastBackupAt,
+                            },
+                          };
+                          await saveOrgState(snap);
+                          alert("Data uploaded to cloud successfully.");
+                        } catch (e) { alert("Upload failed: " + e.message); }
+                        finally { setCloudBusy(false); }
+                      }}><Upload size={14} style={{ verticalAlign: -2 }} /> Upload current data to cloud</PrimaryButton>
+                      <GhostButton disabled={cloudBusy} onClick={async () => {
+                        setCloudBusy(true);
+                        try {
+                          const snap = await loadOrgState();
+                          if (!snap || !snap.data) { alert("No data in cloud yet."); return; }
+                          const d = snap.data;
+                          setStaff(d.staff ?? seedStaff);
+                          setItems(d.items ?? seedItems);
+                          setStockIn(d.stockIn ?? []);
+                          setStockOut(d.stockOut ?? []);
+                          setTransfers(d.transfers ?? []);
+                          setAdjustments(d.adjustments ?? []);
+                          setStaffEquipment(d.staffEquipment ?? []);
+                          setFinanceTx(d.financeTx ?? []);
+                          setVehicles(d.vehicles ?? []);
+                          setAuditLog(d.auditLog ?? []);
+                          setNotifications(d.notifications ?? []);
+                          setCounters(d.counters ?? { si: 0, so: 0, tr: 0, adj: 0, eq: 0, fin: 0 });
+                          setDeptSeq(d.deptSeq ?? { INV: 0, FIN: 1, ADM: 1, SEN: 1, MKT: 0, FLT: 1, WOM: 1, RES: 1, YTH: 1, HOS: 3 });
+                          setAccounts(d.accounts ?? SEED_ACCOUNTS);
+                          setPlayers(d.players ?? []);
+                          setHostelResidents(d.hostelResidents ?? []);
+                          setAttendanceLog(d.attendanceLog ?? []);
+                          setIncidents(d.incidents ?? []);
+                          setFoodSchedule(d.foodSchedule ?? []);
+                          setTrips(d.trips ?? []);
+                          setFuelLog(d.fuelLog ?? []);
+                          setSponsors(d.sponsors ?? []);
+                          setRisks(d.risks ?? []);
+                          setFixtures(d.fixtures ?? []);
+                          setAppLog(d.appLog ?? []);
+                          setLastBackupAt(d.lastBackupAt ?? null);
+                          alert("Cloud data downloaded and applied.");
+                        } catch (e) { alert("Download failed: " + e.message); }
+                        finally { setCloudBusy(false); }
+                      }}>Pull latest data from cloud</GhostButton>
+                      {cloudEmail && <span style={{ fontSize: 12.5, color: "#6b6552", marginLeft: 10 }}>☁️ Cloud: {cloudEmail}</span>}
+                    </>
+                  )}
                 </div>
               </Section>
 
@@ -6080,6 +6262,12 @@ function AccountDrawer({ editing, onClose, staff: staffList, accounts, setAccoun
           const code = `ACC-${String(accounts.length + 1).padStart(3, "0")}`;
           setAccounts((prev) => [...prev, { ...f, code, active: true, mustChangePassword: true, ...h }]);
           if (log) log("Created Account", "account", code, `${f.email} created for ${f.name} (${f.role}/${f.dept})`);
+          // Also register in Supabase Auth so they can log in from any device
+          if (isCloudConfigured()) {
+            cloudSignUp(f.email, f.password)
+              .then(() => alert("Account created. Cloud login ready (Supabase may email a confirmation link unless email confirmation is disabled in project settings)."))
+              .catch((e) => alert("Account created locally. Cloud sign-up failed: " + e.message + " — they can still log in locally."));
+          }
         }
         onClose();
       }}>{editing ? "Save Changes" : "Create Account"}</PrimaryButton>

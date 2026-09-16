@@ -53,24 +53,24 @@ export function sessionValid(session) {
 }
 
 // RBAC --------------------------------------------------------------------
-// Department modules are locked to Executive access only (SUPERADMIN + CEO).
-// Non-executive roles can still sign in and see the Dashboard & Notifications,
-// but they cannot open any department module.
+// Each department module is open to the department's own roles so teams can
+// work in their area. Executives (SUPERADMIN + CEO) are the only roles with
+// access across ALL departments and all cross-department data.
 export const MODULE_PERMISSIONS = {
   dashboard: ["SUPERADMIN", "CEO", "ADMIN", "FINANCE", "INVENTORY", "FLEET", "MARKETING", "HOSTEL", "COACHING", "TEAM", "STAFF"],
-  administration: ["SUPERADMIN", "CEO"],
-  finance: ["SUPERADMIN", "CEO"],
-  marketing: ["SUPERADMIN", "CEO"],
-  fleet: ["SUPERADMIN", "CEO"],
-  team: ["SUPERADMIN", "CEO"],
-  inventory: ["SUPERADMIN", "CEO"],
-  staffequipment: ["SUPERADMIN", "CEO"],
-  players: ["SUPERADMIN", "CEO"],
-  hostel: ["SUPERADMIN", "CEO"],
-  matchday: ["SUPERADMIN", "CEO"],
-  reports: ["SUPERADMIN", "CEO"],
+  administration: ["SUPERADMIN", "CEO", "ADMIN"],
+  finance: ["SUPERADMIN", "CEO", "FINANCE"],
+  marketing: ["SUPERADMIN", "CEO", "MARKETING"],
+  fleet: ["SUPERADMIN", "CEO", "FLEET"],
+  team: ["SUPERADMIN", "CEO", "ADMIN", "COACHING", "TEAM"],
+  inventory: ["SUPERADMIN", "CEO", "INVENTORY"],
+  staffequipment: ["SUPERADMIN", "CEO", "INVENTORY"],
+  players: ["SUPERADMIN", "CEO", "COACHING", "TEAM", "FINANCE"],
+  hostel: ["SUPERADMIN", "CEO", "HOSTEL"],
+  matchday: ["SUPERADMIN", "CEO", "COACHING", "TEAM"],
+  reports: ["SUPERADMIN", "CEO", "ADMIN", "FINANCE", "INVENTORY"],
   notifications: ["SUPERADMIN", "CEO", "ADMIN", "FINANCE", "INVENTORY", "FLEET", "MARKETING", "HOSTEL", "COACHING", "TEAM", "STAFF"],
-  audit: ["SUPERADMIN", "CEO"],
+  audit: ["SUPERADMIN", "CEO", "ADMIN"],
   superadmin: ["SUPERADMIN"],
 };
 
@@ -81,10 +81,10 @@ export function canAccess(account, module) {
   return roles.includes(account.role);
 }
 
-export function canViewDept(account, _dept) {
+export function canViewDept(account, dept) {
   if (!account) return false;
   if (account.role === "SUPERADMIN" || account.role === "CEO") return true;
-  return false;
+  return account.dept === dept;
 }
 
 export function canDelete(account) {
@@ -92,7 +92,7 @@ export function canDelete(account) {
 }
 
 export function canSeeSalaries(account) {
-  return !!account && ["SUPERADMIN", "CEO"].includes(account.role);
+  return !!account && ["SUPERADMIN", "CEO", "FINANCE"].includes(account.role);
 }
 
 export function canActAs(account) {
@@ -100,7 +100,7 @@ export function canActAs(account) {
 }
 
 export function canApprove(account, creatorCode) {
-  return !!account && ["SUPERADMIN", "CEO"].includes(account.role) && account.staffCode !== creatorCode;
+  return !!account && account.staffCode !== creatorCode && !["STAFF"].includes(account.role);
 }
 
 // Account bootstrap --------------------------------------------------------
