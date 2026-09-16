@@ -3770,6 +3770,7 @@ export default function EkhayaSystem() {
   }, [account?.code]);
   const isSuperadmin = role === "SUPERADMIN";
   const [tab, setTab] = useState("dashboard");
+  const [dashDept, setDashDept] = useState(null);
   const [invSubTab, setInvSubTab] = useState("items");
   const [financeSubTab, setFinanceSubTab] = useState("transactions");
   const [drawer, setDrawer] = useState(null);
@@ -4328,10 +4329,6 @@ function deleteAdjustment(code) {
   const statusColor = (status) => status === "Approved" ? "good" : status === "Rejected" || status === "Deleted" ? "bad" : "pending";
 
   // ── CEO dashboard aggregates (live from real state) ──────────────
-  const riskLevel = (r) => {
-    const rank = { "Very Low": 0, "Low": 1, "Medium": 2, "High": 3, "Very High": 4, "Critical": 5 };
-    return Math.max(rank[r.likelihood] || 0, rank[r.impact] || 0);
-  };
   const activeStaff = useMemo(() => staff.filter((s) => s.status === "Active"), [staff]);
   const playersByTeam = useMemo(() => seedTeams.reduce((acc, t) => ({ ...acc, [t.name]: players.filter((p) => p.team === t.name && p.status === "Active").length }), {}), [players]);
   const totalPlayers = useMemo(() => players.filter((p) => p.status === "Active").length, [players]);
@@ -4344,8 +4341,6 @@ function deleteAdjustment(code) {
   const cofExpired = useMemo(() => activeVehicles.filter((v) => v.cofExpiry && v.cofExpiry < todayISO()), [activeVehicles]);
   const insuExpiring = useMemo(() => activeVehicles.filter((v) => v.insuranceExpiry && v.insuranceExpiry >= todayISO() && remainingMonths(v.insuranceExpiry) <= 3), [activeVehicles]);
   const insuExpired = useMemo(() => activeVehicles.filter((v) => v.insuranceExpiry && v.insuranceExpiry < todayISO()), [activeVehicles]);
-  const activeRisks = useMemo(() => risks.filter((r) => r.status !== "Closed"), [risks]);
-  const criticalRisks = useMemo(() => activeRisks.filter((r) => riskLevel(r) >= 3), [activeRisks]);
   const upcomingFixtures = useMemo(() => fixtures.filter((f) => f.status === "Scheduled" || f.status === "Upcoming"), [fixtures]);
   const pendingApprovals = pendingFinance + pendingStockOut.length + pendingVerification.length;
   const netFinance = totalIncome - totalExpense;
@@ -4547,184 +4542,293 @@ function deleteAdjustment(code) {
 
         <div style={{ padding: 26 }}>
           {tab === "dashboard" && (() => {
-              const pct = (p) => Math.max(1, Math.round((p / Math.max(1, totalPlayers)) * 100));
-              const wk = { display: "flex", alignItems: "center", gap: 8 };
               const isLeader = ["SUPERADMIN", "CEO"].includes(account.role);
-              const myTeams = seedTeams.filter((t) => canViewDept(account, t.dept));
-              const squadTeams = myTeams.length > 0 ? myTeams : seedTeams;
-              return (
-                <>
-                  {/* ── Management overview (executive summary) ────────────── */}
-                  {isLeader && (
-                    <Section title="Management Overview — All Departments">
-                      <div style={{ display: "flex", gap: 14, flexWrap: "wrap" }}>
-                        <StatCard label="Pending approvals" value={pendingApprovals} warn={pendingApprovals > 0} sub="Finance · stock in/out" />
-                        <StatCard label="Compliance issues" value={cofExpired.length + cofExpiring.length + insuExpired.length + insuExpiring.length} warn={(cofExpired.length + insuExpiring.length) > 0} sub="COF / insurance" />
-                        <StatCard label="Contracts ≤ 3 months" value={contractExpiring.length} warn={contractExpiring.length > 0} sub="Player renewals to chase" />
-                        <StatCard label="Sponsors expiring ≤ 3 months" value={sponsorsExpiringSoon} warn={sponsorsExpiringSoon > 0} sub="Revenue at risk" />
-                        <StatCard label="Stock below / negative" value={lowStockItems.length + negativeStockItems.length} warn={(lowStockItems.length + negativeStockItems.length) > 0} sub="Inventory items" />
-                        <StatCard label="Equipment outstanding" value={equipmentOut} sub="Unreturned items" />
-                      </div>
-                    </Section>
-                  )}
+              const visibleDepts = seedDepartments.filter((d) => isLeader || canViewDept(account, d.code));
+              const deptIcon = {
+                INV: Package, FIN: Wallet, ADM: Building2, SEN: Shield,
+                MKT: Megaphone, FLT: Truck, WOM: Shirt, RES: Shirt, YTH: Shirt, HOS: Home,
+              };
+              const deptPlayers = (code) => {
+                const team = seedTeams.find((t) => t.dept === code);
+                return team ? players.filter((p) => p.team === team.name) : [];
+              };
+              const teamOf = (code) => seedTeams.find((t) => t.dept === code)?.name || "";
+              const deptStats = (code) => {
+                switch (code) {
+                  case "INV": return { main: items.length, sub: `${lowStockItems.length} low · ${equipmentOut} equipment out` };
+                  case "FIN": return { main: `MK ${netFinance.toLocaleString()}`, sub: `${pendingApprovals} pending` };
+                  case "ADM": return { main: activeStaff.length, sub: "active staff" };
+                  case "FLT": return { main: activeVehicles.length, sub: `${cofExpired.length + cofExpiring.length} COF · ${insuExpired.length + insuExpiring.length} insurance` };
+                  case "HOS": return { main: totalOcc, sub: `${residentsByHouse.filter((r) => r.count > 0).length} houses occupied` };
+                  case "MKT": return { main: sponsors.length, sub: `${sponsorsExpiringSoon} expiring soon` };
+                  case "SEN": case "WOM": case "RES": case "YTH": {
+                    const pl = deptPlayers(code).filter((p) => p.status === "Active");
+                    const exp = deptPlayers(code).filter((p) => p.contractEnd && remainingMonths(p.contractEnd) >= 0 && remainingMonths(p.contractEnd) <= 3).length;
+                    return { main: pl.length, sub: `${exp} contracts ≤3mo` };
+                  }
+                  default: return { main: "—", sub: "" };
+                }
+              };
 
-                  {/* ── Core KPI row ─────────────────────────────────────── */}
-                  <div style={{ display: "flex", gap: 14, marginBottom: 20, flexWrap: "wrap" }}>
-                    {canAccess(account, "players") && <StatCard label="Players (active)" value={totalPlayers} sub="Across all four squads" />}
-                    {canAccess(account, "administration") && <StatCard label="Staff (active)" value={activeStaff.length} sub="Including hostel team" />}
-                    {canAccess(account, "fleet") && <StatCard label="Fleet vehicles" value={activeVehicles.length} sub={`${cofExpiring.length + cofExpired.length} need COF attention`} warn={(cofExpiring.length + cofExpired.length) > 0} />}
-                    {canAccess(account, "hostel") && <StatCard label="Hostel residents" value={totalOcc} sub={`${residentsByHouse.filter((r) => r.count > 0).length} houses occupied`} />}
-                    {canAccess(account, "inventory") && <StatCard label="Inventory items" value={items.length} sub={`${lowStockItems.length} at/below minimum`} warn={lowStockItems.length > 0} />}
-                    {canAccess(account, "finance") && <StatCard label="Net finance" value={`MK ${netFinance.toLocaleString()}`} sub={`${pendingFinance} pending approval`} warn={netFinance < 0} />}
-                  </div>
-
-                  {/* ── Squad summary with visual bars ────────────────────── */}
-                  <Section title={`Squad Summary — Registered Players${!isLeader && squadTeams.length < seedTeams.length ? " (your department)" : ""}`}>
-                    <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-                      {squadTeams.map((t) => {
-                        const n = playersByTeam[t.name] || 0;
-                        const squad = players.filter((p) => p.team === t.name && p.status === "Active");
-                        const nextExp = squad.filter((p) => p.contractEnd && remainingMonths(p.contractEnd) >= 0 && remainingMonths(p.contractEnd) <= 3).length;
-                        return (
-                          <div key={t.code}>
-                            <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 5 }}>
-                              <span style={{ fontWeight: 600, fontSize: 13.5, color: T.text }}>{t.name}</span>
-                              <span style={{ fontSize: 12.5, color: "#948d76" }}>
-                                <strong style={{ color: T.ink, fontSize: 15 }}>{n}</strong> players
-                                {nextExp > 0 && <span style={{ color: T.pending, marginLeft: 10 }}>⚠ {nextExp} contract(s) ≤ 3 months</span>}
-                              </span>
-                            </div>
-                            <div style={{ background: "#f0ede2", borderRadius: 6, height: 10, overflow: "hidden" }}>
-                              <div style={{ background: T.gold, height: "100%", width: `${pct(n)}%`, borderRadius: 6 }} />
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </Section>
-
-                  {/* ── Finance + Approvals ───────────────────────────────── */}
-                  {canAccess(account, "finance") && (
-                    <Section title="Finance at a Glance">
-                      <div style={{ display: "flex", gap: 14, flexWrap: "wrap" }}>
-                        <StatCard label="Income (approved)" value={`MK ${totalIncome.toLocaleString()}`} />
-                        <StatCard label="Expenses (approved)" value={`MK ${totalExpense.toLocaleString()}`} />
-                        <StatCard label="Net position" value={`MK ${netFinance.toLocaleString()}`} warn={netFinance < 0} />
-                        <StatCard label="Transfers" value={`MK ${totalTransfers.toLocaleString()}`} sub="Not income or expense" />
-                        <StatCard label="Pending approvals" value={pendingApprovals} warn={pendingApprovals > 0} sub="Finance · stock in/out" />
-                      </div>
-                    </Section>
-                  )}
-
-                  {/* ── Fleet compliance + Hostel (two-column) ───────────── */}
-                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20, alignItems: "start" }}>
-                    {canAccess(account, "fleet") && <Section title="Fleet Compliance">
-                      {(cofExpired.length === 0 && cofExpiring.length === 0 && insuExpired.length === 0 && insuExpiring.length === 0) ? (
-                        <p style={{ fontSize: 13, color: "#6b6552", margin: 0 }}>All vehicles are compliant — no expired or soon-expiring COF/insurance.</p>
-                      ) : (
-                        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-                          {cofExpired.map((v) => <div key={v.code} style={wk}><Badge tone="bad">COF expired</Badge><span>{v.code} — COF expired {v.cofExpiry}</span></div>)}
-                          {cofExpiring.map((v) => <div key={v.code} style={wk}><Badge tone="pending">COF ≤ 3mo</Badge><span>{v.code} — rebrands {v.cofExpiry}</span></div>)}
-                          {insuExpired.map((v) => <div key={v.code} style={wk}><Badge tone="bad">Insurance expired</Badge><span>{v.code}</span></div>)}
-                          {insuExpiring.map((v) => <div key={v.code} style={wk}><Badge tone="pending">Insurance ≤ 3mo</Badge><span>{v.code} — {v.insuranceExpiry}</span></div>)}
-                          {activeVehicles.filter((v) => v.notes && /not in good|injector|tyre|tyres/i.test(v.notes)).map((v) => <div key={v.code} style={wk}><Badge tone="pending">Maintenance</Badge><span>{v.code} — {v.notes}</span></div>)}
-                        </div>
-                      )}
-                    </Section>}
-
-                    {canAccess(account, "hostel") && <Section title="Hostel Occupancy">
-                      <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-                        {residentsByHouse.map(({ house, count }) => {
-                          const cap = house.code === "HSE-001" ? 13 : 6;
-                          const o = Math.min(100, Math.round((count / Math.max(1, cap)) * 100));
+              // ── Department picker (no department selected yet) ──────────
+              if (!dashDept) {
+                return (
+                  <>
+                    <Section title="Departments">
+                      <p style={{ fontSize: 13, color: "#6b6552", marginTop: 0 }}>
+                        Select a department to see its dashboard.
+                      </p>
+                      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))", gap: 16 }}>
+                        {visibleDepts.map((d) => {
+                          const Icon = deptIcon[d.code] || LayoutGrid;
+                          const s = deptStats(d.code);
                           return (
-                            <div key={house.code}>
-                              <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 5 }}>
-                                <span style={{ fontWeight: 600, fontSize: 13.5 }}>{house.name}</span>
-                                <span style={{ fontSize: 12.5, color: "#948d76" }}>{count} of {cap} beds</span>
+                            <div key={d.code} onClick={() => setDashDept(d.code)} style={{
+                              background: "#fffdf8", border: `1px solid ${T.line}`, borderRadius: 12,
+                              padding: "18px 20px", cursor: "pointer", transition: "transform .12s, boxShadow .12s, borderColor .12s",
+                              borderLeft: `4px solid ${T.gold}`,
+                            }} onMouseEnter={(e) => { e.currentTarget.style.transform = "translateY(-2px)"; e.currentTarget.style.boxShadow = "0 8px 20px rgba(0,0,0,0.08)"; e.currentTarget.style.borderColor = T.gold; }}
+                              onMouseLeave={(e) => { e.currentTarget.style.transform = "translateY(0)"; e.currentTarget.style.boxShadow = "none"; e.currentTarget.style.borderColor = T.line; }}>
+                              <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
+                                <Icon size={20} color={T.gold} />
+                                <span style={{ fontWeight: 600, fontSize: 14.5, color: T.ink }}>{d.name}</span>
                               </div>
-                              <div style={{ background: "#f0ede2", borderRadius: 6, height: 10, overflow: "hidden" }}>
-                                <div style={{ background: o >= 100 ? T.gold : "#c5a34a", height: "100%", width: `${o}%`, borderRadius: 6 }} />
-                              </div>
+                              <div style={{ fontFamily: "Oswald, sans-serif", fontSize: 26, color: T.ink, lineHeight: 1.1 }}>{s.main}</div>
+                              <div style={{ fontSize: 12, color: "#948d76", marginTop: 6 }}>{s.sub}</div>
+                              <div style={{ fontSize: 11.5, color: T.gold, fontWeight: 600, marginTop: 12 }}>Open dashboard →</div>
                             </div>
                           );
                         })}
-                        <p style={{ fontSize: 12.5, color: "#948d76", margin: "6px 0 0" }}>Hostel wardens: Emmanuel Kadzuwa (Thyolo) · Brian Maonga · Peter Majanga</p>
                       </div>
-                    </Section>}
-                  </div>
-
-                  {/* ── Contracts expiring + Risks + Upcoming (three-column) ─ */}
-                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 20, alignItems: "start" }}>
-                    {canAccess(account, "players") && <Section title="Contracts Expiring Soon">
-                      {contractExpiring.length === 0 ? (
-                        <p style={{ fontSize: 13, color: "#6b6552", margin: 0 }}>No contracts expiring within 3 months.</p>
-                      ) : (
-                        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                          {contractExpiring.slice(0, 5).map((p) => (
-                            <div key={p.id} style={{ fontSize: 13, display: "flex", justifyContent: "space-between", gap: 8 }}>
-                              <span>{p.name}</span>
-                              <span style={{ color: T.bad, fontWeight: 600 }}>{remainingMonths(p.contractEnd)} mo</span>
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                    </Section>}
-
-                    {canAccess(account, "matchday") && <Section title="Active Risks & Challenges">
-                      {activeRisks.length === 0 ? (
-                        <p style={{ fontSize: 13, color: "#6b6552", margin: 0 }}>No open risks — all clear.</p>
-                      ) : (
-                        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                          {activeRisks.slice(0, 5).map((r) => (
-                            <div key={r.id} style={{ fontSize: 13, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
-                              <span style={{ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{r.title || r.description}</span>
-                              <Badge tone={riskLevel(r) >= 3 ? "bad" : riskLevel(r) >= 2 ? "pending" : "good"}>{riskLevel(r) >= 3 ? "High" : riskLevel(r) >= 2 ? "Medium" : "Low"}</Badge>
-                            </div>
-                          ))}
-                          {criticalRisks.length > 0 && <p style={{ fontSize: 12, color: T.bad, fontWeight: 600, margin: "4px 0 0" }}>{criticalRisks.length} critical/high risk(s)</p>}
-                        </div>
-                      )}
-                    </Section>}
-
-                    {canAccess(account, "matchday") && <Section title="Upcoming Fixtures">
-                      {upcomingFixtures.length === 0 ? (
-                        <p style={{ fontSize: 13, color: "#6b6552", margin: 0 }}>No scheduled fixtures yet.</p>
-                      ) : (
-                        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                          {upcomingFixtures.slice(0, 5).map((f) => (
-                            <div key={f.id} style={{ fontSize: 13 }}>
-                              <span style={{ color: "#948d76", fontWeight: 600, fontSize: 11.5 }}>{f.date}</span>
-                              <div style={{ marginTop: 2 }}>{f.venue === "Home" ? `vs ${f.opponent}` : `${f.opponent} (${String(f.venue || "Away").toLowerCase()})`}</div>
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                    </Section>}
-                  </div>
-
-                  {/* ── Attention-needed inventory ────────────────────────── */}
-                  {canAccess(account, "inventory") && negativeStockItems.length > 0 && (
-                    <Section title="Inventory — negative balances (reconcile)">
-                      <p style={{ fontSize: 13, color: "#6b6552", marginTop: 0 }}>These items show more stock out than in on the imported sheet — usually an unrecorded stock-in or a miscount. Worth reconciling before relying on these numbers.</p>
+                    </Section>
+                    <Section title="Recent Activity">
                       <Table
-                        columns={[{ key: "code", label: "Item Code" }, { key: "name", label: "Item" }, { key: "quantity", label: "Balance" }, { key: "location", label: "Location" }]}
-                        rows={negativeStockItems.slice(0, 10)}
+                        columns={[
+                          { key: "at", label: "When" }, { key: "byName", label: "Staff" },
+                          { key: "action", label: "Action" }, { key: "entityCode", label: "Reference" },
+                        ]}
+                        rows={auditLog.slice(0, 8)}
+                        empty="No activity yet — actions across the system will appear here."
                       />
                     </Section>
+                  </>
+                );
+              }
+
+              // ── Individual department dashboard ─────────────────────────
+              const dept = seedDepartments.find((d) => d.code === dashDept);
+              const Icon = deptIcon[dashDept] || LayoutGrid;
+              const wk = { display: "flex", alignItems: "center", gap: 8 };
+              const teamPlayers = deptPlayers(dashDept).filter((p) => p.status === "Active");
+              const teamExpiring = deptPlayers(dashDept).filter((p) => p.contractEnd && remainingMonths(p.contractEnd) >= 0 && remainingMonths(p.contractEnd) <= 3);
+              return (
+                <>
+                  <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 18 }}>
+                    <button onClick={() => setDashDept(null)} style={{
+                      background: "transparent", border: `1px solid ${T.line}`, color: "#6b6552",
+                      padding: "7px 12px", borderRadius: 7, fontSize: 12.5, cursor: "pointer", fontFamily: "Inter, sans-serif",
+                      display: "flex", alignItems: "center", gap: 5,
+                    }}><LayoutGrid size={13} /> All Departments</button>
+                    <h3 style={{ fontFamily: "Oswald, sans-serif", fontSize: 19, color: T.ink, margin: 0, display: "flex", alignItems: "center", gap: 9 }}>
+                      <Icon size={20} color={T.gold} /> {dept?.name} — Dashboard
+                    </h3>
+                  </div>
+
+                  {dashDept === "INV" && (
+                    <>
+                      <div style={{ display: "flex", gap: 14, flexWrap: "wrap", marginBottom: 20 }}>
+                        <StatCard label="Inventory items" value={items.length} />
+                        <StatCard label="At / below minimum" value={lowStockItems.length} warn={lowStockItems.length > 0} />
+                        <StatCard label="Negative balances" value={negativeStockItems.length} warn={negativeStockItems.length > 0} sub="Reconcile these" />
+                        <StatCard label="Equipment outstanding" value={equipmentOut} sub="Unreturned items" />
+                        <StatCard label="Pending stock-out" value={pendingStockOut.length} warn={pendingStockOut.length > 0} />
+                        <StatCard label="Awaiting verification" value={pendingVerification.length} warn={pendingVerification.length > 0} />
+                      </div>
+                      {(lowStockItems.length + negativeStockItems.length) > 0 && (
+                        <Section title="Stock needing attention">
+                          <Table
+                            columns={[{ key: "code", label: "Item Code" }, { key: "name", label: "Item" }, { key: "quantity", label: "Balance" }, { key: "min", label: "Minimum" }, { key: "location", label: "Location" }]}
+                            rows={[...negativeStockItems, ...lowStockItems].slice(0, 12)}
+                          />
+                        </Section>
+                      )}
+                    </>
                   )}
 
-                  {/* ── Recent activity ───────────────────────────────────── */}
-                  <Section title="Recent Activity">
-                    <Table
-                      columns={[
-                        { key: "at", label: "When" }, { key: "byName", label: "Staff" },
-                        { key: "action", label: "Action" }, { key: "entityCode", label: "Reference" },
-                      ]}
-                      rows={auditLog.slice(0, 8)}
-                      empty="No activity yet — actions across the system will appear here."
-                    />
-                  </Section>
+                  {dashDept === "FIN" && (
+                    <>
+                      <div style={{ display: "flex", gap: 14, flexWrap: "wrap", marginBottom: 20 }}>
+                        <StatCard label="Income (approved)" value={`MK ${totalIncome.toLocaleString()}`} />
+                        <StatCard label="Expenses (approved)" value={`MK ${totalExpense.toLocaleString()}`} />
+                        <StatCard label="Net position" value={`MK ${netFinance.toLocaleString()}`} warn={netFinance < 0} />
+                        <StatCard label="Transfers" value={`MK ${totalTransfers.toLocaleString()}`} sub="Internal" />
+                        <StatCard label="Pending approvals" value={pendingApprovals} warn={pendingApprovals > 0} sub="Finance · stock in/out" />
+                      </div>
+                      <Section title="Latest Transactions">
+                        <Table
+                          columns={[
+                            { key: "code", label: "Code" }, { key: "date", label: "Date" },
+                            { key: "type", label: "Type" }, { key: "category", label: "Category" },
+                            { key: "amount", label: "Amount (MK)", render: (r) => `MK ${Number(r.amount).toLocaleString()}` },
+                            { key: "status", label: "Status", render: (r) => <Badge tone={r.status === "Approved" ? "good" : "pending"}>{r.status}</Badge> },
+                          ]}
+                          rows={financeTx.slice().sort((a, b) => (a.date < b.date ? 1 : -1)).slice(0, 8)}
+                        />
+                      </Section>
+                    </>
+                  )}
+
+                  {dashDept === "ADM" && (
+                    <>
+                      <div style={{ display: "flex", gap: 14, flexWrap: "wrap", marginBottom: 20 }}>
+                        <StatCard label="Staff (active)" value={activeStaff.length} />
+                        <StatCard label="Total staff records" value={staff.length} />
+                        <StatCard label="Departments" value={seedDepartments.length} sub="Across the club" />
+                        {accounts.length > 0 && <StatCard label="User accounts" value={accounts.filter((a) => a.active).length} sub="Enabled logins" />}
+                      </div>
+                      <Section title="Staff Records">
+                        <Table
+                          columns={[
+                            { key: "code", label: "Staff Code" }, { key: "name", label: "Name" },
+                            { key: "dept", label: "Dept" }, { key: "role", label: "Role" },
+                            { key: "title", label: "Title" },
+                            { key: "status", label: "Status", render: (r) => <Badge tone={r.status === "Active" ? "good" : "muted"}>{r.status}</Badge> },
+                          ]}
+                          rows={staff}
+                        />
+                      </Section>
+                    </>
+                  )}
+
+                  {["SEN", "WOM", "RES", "YTH"].includes(dashDept) && (
+                    <>
+                      <div style={{ display: "flex", gap: 14, flexWrap: "wrap", marginBottom: 20 }}>
+                        <StatCard label="Active players" value={teamPlayers.length} sub={teamOf(dashDept)} />
+                        <StatCard label="Contracts ≤ 3 months" value={teamExpiring.length} warn={teamExpiring.length > 0} />
+                        <StatCard label="Upcoming fixtures" value={upcomingFixtures.filter((f) => f.team === teamOf(dashDept) || !f.team).length} />
+                      </div>
+                      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20, alignItems: "start" }}>
+                        <Section title={`${teamOf(dashDept)} Squad`}>
+                          <Table
+                            columns={[
+                              { key: "shirtNo", label: "#" }, { key: "name", label: "Player" },
+                              { key: "position", label: "Position" },
+                              { key: "contractEnd", label: "Contract" },
+                            ]}
+                            rows={teamPlayers.slice(0, 15)}
+                          />
+                        </Section>
+                        <Section title="Contracts Expiring Soon">
+                          {teamExpiring.length === 0 ? (
+                            <p style={{ fontSize: 13, color: "#6b6552", margin: 0 }}>No contracts expiring within 3 months.</p>
+                          ) : (
+                            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                              {teamExpiring.map((p) => (
+                                <div key={`${p.shirtNo}-${p.name}`} style={{ fontSize: 13, display: "flex", justifyContent: "space-between", gap: 8 }}>
+                                  <span>{p.name}</span>
+                                  <span style={{ color: T.bad, fontWeight: 600 }}>{remainingMonths(p.contractEnd)} mo</span>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </Section>
+                      </div>
+                    </>
+                  )}
+
+                  {dashDept === "MKT" && (
+                    <>
+                      <div style={{ display: "flex", gap: 14, flexWrap: "wrap", marginBottom: 20 }}>
+                        <StatCard label="Sponsors" value={sponsors.length} sub={sponsors.filter((s) => s.status === "Active").length + " active"} />
+                        <StatCard label="Expiring ≤ 3 months" value={sponsorsExpiringSoon} warn={sponsorsExpiringSoon > 0} sub="Revenue at risk" />
+                        <StatCard label="Content days" value={CONTENT_CALENDAR.length} sub="Weekly programme" />
+                      </div>
+                      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20, alignItems: "start" }}>
+                        <Section title="Sponsors">
+                          <Table
+                            columns={[
+                              { key: "name", label: "Sponsor" },
+                              { key: "amount", label: "Value (MK)", render: (r) => `MK ${Number(r.amount || 0).toLocaleString()}` },
+                              { key: "endDate", label: "Ends" },
+                              { key: "status", label: "Status", render: (r) => <Badge tone={r.status === "Active" ? "good" : "muted"}>{r.status}</Badge> },
+                            ]}
+                            rows={sponsors}
+                          />
+                        </Section>
+                        <Section title="Weekly Content Calendar">
+                          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                            {CONTENT_CALENDAR.map((c) => (
+                              <div key={c.day} style={{ fontSize: 12.5 }}>
+                                <span style={{ fontWeight: 700, color: T.ink }}>{c.day}</span> — {c.programme}
+                              </div>
+                            ))}
+                          </div>
+                        </Section>
+                      </div>
+                    </>
+                  )}
+
+                  {dashDept === "FLT" && (
+                    <>
+                      <div style={{ display: "flex", gap: 14, flexWrap: "wrap", marginBottom: 20 }}>
+                        <StatCard label="Fleet vehicles" value={activeVehicles.length} />
+                        <StatCard label="COF attention" value={cofExpired.length + cofExpiring.length} warn={(cofExpired.length + cofExpiring.length) > 0} sub={`${cofExpired.length} expired`} />
+                        <StatCard label="Insurance attention" value={insuExpired.length + insuExpiring.length} warn={(insuExpired.length + insuExpiring.length) > 0} sub={`${insuExpired.length} expired`} />
+                        <StatCard label="Fuel refills logged" value={fuelLog.length} />
+                        <StatCard label="Trips logged" value={trips.length} />
+                      </div>
+                      <Section title="Fleet Compliance">
+                        {(cofExpired.length === 0 && cofExpiring.length === 0 && insuExpired.length === 0 && insuExpiring.length === 0) ? (
+                          <p style={{ fontSize: 13, color: "#6b6552", margin: 0 }}>All vehicles are compliant — no expired or soon-expiring COF/insurance.</p>
+                        ) : (
+                          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                            {cofExpired.map((v) => <div key={v.code} style={wk}><Badge tone="bad">COF expired</Badge><span>{v.code} — COF expired {v.cofExpiry}</span></div>)}
+                            {cofExpiring.map((v) => <div key={v.code} style={wk}><Badge tone="pending">COF ≤ 3mo</Badge><span>{v.code} — expires {v.cofExpiry}</span></div>)}
+                            {insuExpired.map((v) => <div key={v.code} style={wk}><Badge tone="bad">Insurance expired</Badge><span>{v.code}</span></div>)}
+                            {insuExpiring.map((v) => <div key={v.code} style={wk}><Badge tone="pending">Insurance ≤ 3mo</Badge><span>{v.code} — {v.insuranceExpiry}</span></div>)}
+                            {activeVehicles.filter((v) => v.notes && /not in good|injector|tyre|tyres/i.test(v.notes)).map((v) => <div key={v.code} style={wk}><Badge tone="pending">Maintenance</Badge><span>{v.code} — {v.notes}</span></div>)}
+                          </div>
+                        )}
+                      </Section>
+                    </>
+                  )}
+
+                  {dashDept === "HOS" && (
+                    <>
+                      <div style={{ display: "flex", gap: 14, flexWrap: "wrap", marginBottom: 20 }}>
+                        <StatCard label="Residents" value={totalOcc} sub={`${residentsByHouse.filter((r) => r.count > 0).length} houses lived in`} />
+                        <StatCard label="Houses" value={seedHostels.length} />
+                        <StatCard label="Meal days scheduled" value={foodSchedule.length} sub="Weekly menu" />
+                      </div>
+                      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20, alignItems: "start" }}>
+                        <Section title="House Occupancy">
+                          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                            {residentsByHouse.map(({ house, count }) => {
+                              const cap = house.code === "HSE-001" ? 13 : 6;
+                              const o = Math.min(100, Math.round((count / Math.max(1, cap)) * 100));
+                              return (
+                                <div key={house.code}>
+                                  <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 5 }}>
+                                    <span style={{ fontWeight: 600, fontSize: 13.5 }}>{house.name}</span>
+                                    <span style={{ fontSize: 12.5, color: "#948d76" }}>{count} of {cap} beds</span>
+                                  </div>
+                                  <div style={{ background: "#f0ede2", borderRadius: 6, height: 10, overflow: "hidden" }}>
+                                    <div style={{ background: o >= 100 ? T.gold : "#c5a34a", height: "100%", width: `${o}%`, borderRadius: 6 }} />
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </Section>
+                        <Section title="Weekly Menu">
+                          <Table
+                            columns={[{ key: "day", label: "Day" }, { key: "breakfast", label: "Breakfast" }, { key: "lunch", label: "Lunch" }, { key: "supper", label: "Supper" }]}
+                            rows={foodSchedule}
+                          />
+                        </Section>
+                      </div>
+                    </>
+                  )}
                 </>
               );
             })()}
