@@ -4430,20 +4430,10 @@ function deleteAdjustment(code) {
             <GoogleSignInUnconfigured />
           )}
           <p style={{ fontSize: 11, color: "#948d76", marginTop: 14, textAlign: "center" }}>
-            Already have an account? Your login is remembered here automatically. New accounts are set to a temporary password and must be changed on first login.
+            Already have an account? Your login is remembered here automatically. You can change your password any time from the top-right menu.
           </p>
         </div>
       </div>
-    );
-  }
-
-  if (account.mustChangePassword) {
-    return (
-      <ForcedPasswordScreen
-        account={account}
-        onSubmit={changePassword}
-        onLogout={logout}
-      />
     );
   }
 
@@ -4504,9 +4494,6 @@ function deleteAdjustment(code) {
             {nav.find((n) => n.key === tab)?.label || tab}
           </h2>
           <div style={{ fontSize: 13, display: "flex", alignItems: "center", gap: 10 }}>
-            {account.mustChangePassword && (
-              <span style={{ color: T.bad, fontSize: 12, marginRight: 8 }}>Password change required</span>
-            )}
             {isSuperadmin && <Badge tone="pending">Superadmin</Badge>}
             {mayActAs && (
               <>
@@ -6421,47 +6408,6 @@ function GoogleSignInUnconfigured() {
       </svg>
       Continue with Google
     </button>
-  );
-}
-
-function ForcedPasswordScreen({ account, onSubmit, onLogout }) {
-  const [cur, setCur] = useState("");
-  const [next, setNext] = useState("");
-  const [confirm, setConfirm] = useState("");
-  const [error, setError] = useState("");
-  return (
-    <div style={{ fontFamily: "Inter, sans-serif", background: `linear-gradient(rgba(21,20,15,0.78), rgba(21,20,15,0.88)), ${LOGO_URL} center/cover no-repeat, #15140f`, backgroundAttachment: "fixed", minHeight: "100vh", color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
-      <style>{fontImport}</style>
-      <div style={{ width: 380, maxWidth: "100%", background: "rgba(255,251,240,0.96)", borderRadius: 16, padding: 34, boxShadow: "0 24px 60px rgba(0,0,0,0.45)", border: "1px solid rgba(232,207,143,0.5)" }}>
-        <div style={{ textAlign: "center", marginBottom: 18 }}>
-          <div style={{ fontFamily: "Oswald, sans-serif", fontSize: 20, color: T.ink, fontWeight: 700, letterSpacing: 0.5 }}>Password change required</div>
-          <div style={{ fontSize: 12.5, color: "#6b6552", marginTop: 6 }}>{account.name} — <strong>{account.email}</strong></div>
-          <p style={{ fontSize: 12.5, color: "#6b6552", margin: "10px 0 0" }}>Your account is using a temporary password. Set a new one before continuing.</p>
-        </div>
-        {error && <p style={{ fontSize: 12.5, color: T.bad, marginBottom: 12 }}>{error}</p>}
-        <Field label="Current (temporary) password">
-          <input type="password" style={{ ...inputStyle, background: "#fff" }} value={cur} onChange={(e) => setCur(e.target.value)} autoFocus />
-        </Field>
-        <Field label="New password (min 8 characters)">
-          <input type="password" style={{ ...inputStyle, background: "#fff" }} value={next} onChange={(e) => setNext(e.target.value)} />
-        </Field>
-        <Field label="Confirm new password">
-          <input type="password" style={{ ...inputStyle, background: "#fff" }} value={confirm} onChange={(e) => setConfirm(e.target.value)} />
-        </Field>
-        <PrimaryButton tone="gold" onClick={() => {
-          setError("");
-          if (!cur) { setError("Enter your current password."); return; }
-          if ((next || "").length < 8) { setError("New password must be at least 8 characters."); return; }
-          if (next !== confirm) { setError("New password and confirmation do not match."); return; }
-          onSubmit(cur, next);
-        }}>
-          Set New Password
-        </PrimaryButton>
-        <div style={{ textAlign: "center", marginTop: 12 }}>
-          <button onClick={onLogout} style={{ background: "none", border: "none", color: "#6b6552", fontSize: 12, cursor: "pointer", fontFamily: "Inter, sans-serif", textDecoration: "underline" }}>Sign out</button>
-        </div>
-      </div>
-    </div>
   );
 }
 
