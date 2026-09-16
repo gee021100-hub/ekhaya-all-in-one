@@ -22,6 +22,7 @@ export function buildSnapshot(state) {
     staffEquipment, financeTx, vehicles, auditLog, notifications,
     counters, deptSeq, accounts, players, hostelResidents, attendanceLog,
     incidents, foodSchedule, trips, fuelLog, sponsors, risks, fixtures,
+    playerTransfers, weeklyBudgets, trainingAllowances,
     appLog, lastBackupAt,
   } = state;
   return {
@@ -32,6 +33,7 @@ export function buildSnapshot(state) {
       staffEquipment, financeTx, vehicles, auditLog, notifications,
       counters, deptSeq, accounts, players, hostelResidents, attendanceLog,
       incidents, foodSchedule, trips, fuelLog, sponsors, risks, fixtures,
+      playerTransfers, weeklyBudgets, trainingAllowances,
       appLog, lastBackupAt,
     },
   };

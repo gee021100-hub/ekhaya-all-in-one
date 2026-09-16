@@ -3584,6 +3584,9 @@ export default function EkhayaSystem() {
   const [sponsors, setSponsors] = useState(() => loadPersisted("sponsors", emptyMods.sponsors));
   const [risks, setRisks] = useState(() => loadPersisted("risks", emptyMods.risks));
   const [fixtures, setFixtures] = useState(() => loadPersisted("fixtures", emptyMods.fixtures));
+  const [playerTransfers, setPlayerTransfers] = useState(() => loadPersisted("playerTransfers", []));
+  const [weeklyBudgets, setWeeklyBudgets] = useState(() => loadPersisted("weeklyBudgets", []));
+  const [trainingAllowances, setTrainingAllowances] = useState(() => loadPersisted("trainingAllowances", []));
   const [revealSalaries, setRevealSalaries] = useState(false);
   const [appLog, setAppLog] = useState(() => loadPersisted("appLog", []));
   const [lastBackupAt, setLastBackupAt] = useState(() => loadPersisted("lastBackupAt", null));
@@ -3598,6 +3601,7 @@ export default function EkhayaSystem() {
   const [hostelSubTab, setHostelSubTab] = useState("residents");
   const [dateFilter, setDateFilter] = useState(todayISO());
   const [matchSubTab, setMatchSubTab] = useState("fixtures");
+  const [adminSubTab, setAdminSubTab] = useState("staff");
 
   // Persist state to localStorage, debounced so rapid edits do not write
   // the entire dataset on every keystroke. A final flush happens on sign-out.
@@ -3628,9 +3632,12 @@ export default function EkhayaSystem() {
     savePersisted("sponsors", sponsors);
     savePersisted("risks", risks);
     savePersisted("fixtures", fixtures);
+    savePersisted("playerTransfers", playerTransfers);
+    savePersisted("weeklyBudgets", weeklyBudgets);
+    savePersisted("trainingAllowances", trainingAllowances);
     savePersisted("appLog", appLog);
     savePersisted("lastBackupAt", lastBackupAt);
-  }, [staff, items, stockIn, stockOut, transfers, adjustments, staffEquipment, financeTx, vehicles, auditLog, notifications, counters, deptSeq, accounts, players, hostelResidents, attendanceLog, incidents, foodSchedule, trips, fuelLog, sponsors, risks, fixtures, appLog, lastBackupAt]);
+  }, [staff, items, stockIn, stockOut, transfers, adjustments, staffEquipment, financeTx, vehicles, auditLog, notifications, counters, deptSeq, accounts, players, hostelResidents, attendanceLog, incidents, foodSchedule, trips, fuelLog, sponsors, risks, fixtures, playerTransfers, weeklyBudgets, trainingAllowances, appLog, lastBackupAt]);
   flushRef.current = flushPersist;
 
   useEffect(() => {
@@ -3667,6 +3674,7 @@ export default function EkhayaSystem() {
           staffEquipment, financeTx, vehicles, auditLog, notifications,
           counters, deptSeq, accounts, players, hostelResidents, attendanceLog,
           incidents, foodSchedule, trips, fuelLog, sponsors, risks, fixtures,
+          playerTransfers, weeklyBudgets, trainingAllowances,
           appLog, lastBackupAt,
         },
       };
@@ -3678,6 +3686,7 @@ export default function EkhayaSystem() {
     staffEquipment, financeTx, vehicles, auditLog, notifications,
     counters, deptSeq, accounts, players, hostelResidents, attendanceLog,
     incidents, foodSchedule, trips, fuelLog, sponsors, risks, fixtures,
+    playerTransfers, weeklyBudgets, trainingAllowances,
     appLog, lastBackupAt]);
 
   // Cloud: debounced push to Supabase when authenticated
@@ -3859,6 +3868,9 @@ export default function EkhayaSystem() {
             setSponsors(snap.data.sponsors ?? []);
             setRisks(snap.data.risks ?? []);
             setFixtures(snap.data.fixtures ?? []);
+            setPlayerTransfers(snap.data.playerTransfers ?? []);
+            setWeeklyBudgets(snap.data.weeklyBudgets ?? []);
+            setTrainingAllowances(snap.data.trainingAllowances ?? []);
             setAppLog(snap.data.appLog ?? []);
             setLastBackupAt(snap.data.lastBackupAt ?? null);
           } else if (financeTx.length > 50 || staff.length > 5) {
@@ -3871,6 +3883,7 @@ export default function EkhayaSystem() {
                 staffEquipment, financeTx, vehicles, auditLog, notifications,
                 counters, deptSeq, accounts, players, hostelResidents, attendanceLog,
                 incidents, foodSchedule, trips, fuelLog, sponsors, risks, fixtures,
+                playerTransfers, weeklyBudgets, trainingAllowances,
                 appLog, lastBackupAt,
               },
             };
@@ -4820,30 +4833,207 @@ function deleteAdjustment(code) {
               );
             })()}
 
-          {tab === "administration" && (
-            <Section title="Staff / Employee Records" action={
-              <PrimaryButton onClick={() => setDrawer({ type: "staff" })}><Plus size={14} style={{ verticalAlign: -2 }} /> Add Staff</PrimaryButton>
-            }>
-              <Table
-                columns={[
-                  { key: "code", label: "Staff Code" }, { key: "name", label: "Name" },
-                  { key: "dept", label: "Department" }, { key: "title", label: "Job Title" },
-                  { key: "status", label: "Status", render: (r) => <Badge tone={r.status === "Active" ? "good" : "muted"}>{r.status}</Badge> },
-                  { key: "startDate", label: "Start Date" },
-                  { key: "actions", label: "", render: (r) => (
-                    <RowActions
-                      onEdit={() => setDrawer({ type: "staff", editing: r })}
-                      onDelete={() => deleteStaff(r.code)}
-                    />
-                  ) },
+          {tab === "administration" && (() => {
+            const fmt = (n) => `MK ${Number(n || 0).toLocaleString()}`;
+            const txIn = playerTransfers.filter((t) => t.direction === "Incoming");
+            const txOut = playerTransfers.filter((t) => t.direction === "Outgoing");
+            const txFee = playerTransfers.reduce((s, t) => s + (Number(t.fee) || 0), 0);
+            const wbIncome = weeklyBudgets.reduce((s, w) => s + (Number(w.plannedIncome) || 0), 0);
+            const wbExpense = weeklyBudgets.reduce((s, w) => s + (w.items || []).reduce((x, i) => x + (Number(i.amount) || 0), 0), 0);
+            const talAll = trainingAllowances.reduce((s, a) => s + (Number(a.amount) || 0), 0);
+            const talPaid = trainingAllowances.filter((a) => a.status === "Paid").reduce((s, a) => s + (Number(a.amount) || 0), 0);
+            const currentMonth = todayISO().slice(0, 7);
+            return (
+            <>
+              <SubTabs
+                items={[
+                  { key: "staff", label: "Staff Records" },
+                  { key: "players", label: "Register Players" },
+                  { key: "transfers", label: "Player Transfers" },
+                  { key: "budget", label: "Weekly Budget" },
+                  { key: "allowances", label: "Training Allowances" },
                 ]}
-                rows={staff}
+                active={adminSubTab}
+                onChange={setAdminSubTab}
               />
-              <p style={{ fontSize: 12.5, color: "#948d76", marginTop: 12 }}>
-                Every Staff Code created here becomes selectable across Inventory, Finance, and Staff Equipment as Created By / Approved By.
-              </p>
-            </Section>
-          )}
+
+              {adminSubTab === "staff" && (
+                <Section title="Staff / Employee Records" action={
+                  <PrimaryButton onClick={() => setDrawer({ type: "staff" })}><Plus size={14} style={{ verticalAlign: -2 }} /> Add Staff</PrimaryButton>
+                }>
+                  <Table
+                    columns={[
+                      { key: "code", label: "Staff Code" }, { key: "name", label: "Name" },
+                      { key: "dept", label: "Department" }, { key: "title", label: "Job Title" },
+                      { key: "status", label: "Status", render: (r) => <Badge tone={r.status === "Active" ? "good" : "muted"}>{r.status}</Badge> },
+                      { key: "startDate", label: "Start Date" },
+                      { key: "actions", label: "", render: (r) => (
+                        <RowActions
+                          onEdit={() => setDrawer({ type: "staff", editing: r })}
+                          onDelete={() => deleteStaff(r.code)}
+                        />
+                      ) },
+                    ]}
+                    rows={staff}
+                  />
+                  <p style={{ fontSize: 12.5, color: "#948d76", marginTop: 12 }}>
+                    Every Staff Code created here becomes selectable across Inventory, Finance, and Staff Equipment as Created By / Approved By.
+                  </p>
+                </Section>
+              )}
+
+              {adminSubTab === "players" && (
+                <>
+                  <div style={{ display: "flex", gap: 16, marginBottom: 18, flexWrap: "wrap" }}>
+                    <StatCard label="Registered players" value={totalPlayers} sub="Active across all squads" />
+                    <StatCard label="Contracts expiring ≤ 3 mo" value={contractExpiring.length} warn={contractExpiring.length > 0} />
+                    {seedTeams.map((t) => <StatCard key={t.code} label={t.name} value={playersByTeam[t.name] || 0} />)}
+                  </div>
+                  <Section title="Player Registration" action={
+                    <PrimaryButton onClick={() => setDrawer({ type: "player" })}><Plus size={14} style={{ verticalAlign: -2 }} /> Register Player</PrimaryButton>
+                  }>
+                    <p style={{ fontSize: 12.5, color: "#6b6552", marginTop: 0 }}>
+                      Register a new player or update an existing registration. New players get a shirt number, squad placement, and optional contract / salary details.
+                    </p>
+                    <Table
+                      columns={[
+                        { key: "shirtNo", label: "Shirt #", render: (r) => <span style={{ fontWeight: 700, fontFamily: "Oswald, sans-serif" }}>{r.shirtNo}</span> },
+                        { key: "name", label: "Name" },
+                        { key: "dob", label: "DOB", render: (r) => r.dob || "—" },
+                        { key: "age", label: "Age", render: (r) => r.dob ? calculateAge(r.dob) : "—" },
+                        { key: "position", label: "Position", render: (r) => r.position || "—" },
+                        { key: "team", label: "Team" },
+                        { key: "registered", label: "Registration", render: (r) => r.contractStart ? `Since ${r.contractStart}` : "—" },
+                        { key: "contractEnd", label: "Contract Ends", render: (r) => r.contractEnd || "—" },
+                        { key: "status", label: "Status", render: (r) => <Badge tone={r.status === "Active" ? "good" : "muted"}>{r.status}</Badge> },
+                        { key: "actions", label: "", render: (r) => (
+                          <RowActions
+                            onEdit={() => setDrawer({ type: "player", editing: r })}
+                            onDelete={canDelete(account) ? () => { if (window.confirm(`Delete player ${r.name}? This cannot be undone.`)) { setPlayers((prev) => prev.filter((p) => p.id !== r.id)); log("Deleted Player", "player", r.name, `Deleted by ${actor.code}`); } } : undefined}
+                          />
+                        ) },
+                      ]}
+                      rows={players}
+                      empty="No players registered yet."
+                    />
+                  </Section>
+                </>
+              )}
+
+              {adminSubTab === "transfers" && (
+                <>
+                  <div style={{ display: "flex", gap: 16, marginBottom: 18, flexWrap: "wrap" }}>
+                    <StatCard label="Transfers logged" value={playerTransfers.length} />
+                    <StatCard label="Incoming" value={txIn.length} />
+                    <StatCard label="Outgoing" value={txOut.length} />
+                    <StatCard label="Total fees" value={fmt(txFee)} sub="Sum of all transfer fees (MK)" />
+                  </div>
+                  <Section title="Player Transfers" action={
+                    <PrimaryButton onClick={() => setDrawer({ type: "playerTransfer" })}><Plus size={14} style={{ verticalAlign: -2 }} /> Log Transfer</PrimaryButton>
+                  }>
+                    <p style={{ fontSize: 12.5, color: "#6b6552", marginTop: 0 }}>
+                      Track player movement in and out of the club — counterpart club, date, transfer fee and status.
+                    </p>
+                    <Table
+                      columns={[
+                        { key: "code", label: "Code" },
+                        { key: "date", label: "Date" },
+                        { key: "direction", label: "Type", render: (r) => <Badge tone={r.direction === "Incoming" ? "good" : "pending"}>{r.direction}</Badge> },
+                        { key: "playerName", label: "Player" },
+                        { key: "club", label: "Counterpart Club" },
+                        { key: "fee", label: "Fee (MK)", render: (r) => r.fee ? fmt(r.fee) : "—" },
+                        { key: "status", label: "Status", render: (r) => <Badge tone={r.status === "Completed" ? "good" : r.status === "Approved" ? "pending" : "muted"}>{r.status}</Badge> },
+                        { key: "notes", label: "Notes", render: (r) => r.notes || "—" },
+                        { key: "actions", label: "", render: (r) => (
+                          <RowActions
+                            onEdit={() => setDrawer({ type: "playerTransfer", editing: r })}
+                            onDelete={canDelete(account) ? () => { if (window.confirm(`Delete transfer ${r.code}? This cannot be undone.`)) { setPlayerTransfers((prev) => prev.filter((t) => t.id !== r.id)); log("Deleted Transfer", "transfer", r.code, `${r.playerName} deleted by ${actor.code}`); } } : undefined}
+                          />
+                        ) },
+                      ]}
+                      rows={[...playerTransfers].sort((a, b) => String(b.date).localeCompare(String(a.date)))}
+                      empty="No transfers logged yet."
+                    />
+                  </Section>
+                </>
+              )}
+
+              {adminSubTab === "budget" && (
+                <>
+                  <div style={{ display: "flex", gap: 16, marginBottom: 18, flexWrap: "wrap" }}>
+                    <StatCard label="Weeks prepared" value={weeklyBudgets.length} />
+                    <StatCard label="Planned income (all weeks)" value={fmt(wbIncome)} />
+                    <StatCard label="Planned expenditure" value={fmt(wbExpense)} />
+                    <StatCard label="Net balance" value={fmt(wbIncome - wbExpense)} warn={wbIncome - wbExpense < 0} sub="Income minus planned spend" />
+                  </div>
+                  <Section title="Weekly Budget Preparation" action={
+                    <PrimaryButton onClick={() => setDrawer({ type: "weeklyBudget" })}><Plus size={14} style={{ verticalAlign: -2 }} /> Prepare Weekly Budget</PrimaryButton>
+                  }>
+                    <p style={{ fontSize: 12.5, color: "#6b6552", marginTop: 0 }}>
+                      Prepare a weekly cash plan for any department or the whole club: planned income, category-by-category planned expenditure, and a working balance.
+                    </p>
+                    <Table
+                      columns={[
+                        { key: "code", label: "Code" },
+                        { key: "weekStart", label: "Week Starting" },
+                        { key: "department", label: "Department" },
+                        { key: "plannedIncome", label: "Planned Income", render: (r) => fmt(r.plannedIncome) },
+                        { key: "plannedExpense", label: "Planned Expense", render: (r) => fmt((r.items || []).reduce((s, i) => s + (Number(i.amount) || 0), 0)) },
+                        { key: "balance", label: "Balance", render: (r) => { const b = (Number(r.plannedIncome) || 0) - (r.items || []).reduce((s, i) => s + (Number(i.amount) || 0), 0); return <span style={{ color: b < 0 ? T.bad : "#6b6552", fontWeight: 600 }}>{fmt(b)}</span>; } },
+                        { key: "status", label: "Status", render: (r) => <Badge tone={r.status === "Approved" ? "good" : "pending"}>{r.status}</Badge> },
+                        { key: "actions", label: "", render: (r) => (
+                          <RowActions
+                            onEdit={() => setDrawer({ type: "weeklyBudget", editing: r })}
+                            onDelete={canDelete(account) ? () => { if (window.confirm(`Delete weekly budget ${r.code}? This cannot be undone.`)) { setWeeklyBudgets((prev) => prev.filter((w) => w.id !== r.id)); log("Deleted Weekly Budget", "weekly_budget", r.code, `Week ${r.weekStart} deleted by ${actor.code}`); } } : undefined}
+                          />
+                        ) },
+                      ]}
+                      rows={[...weeklyBudgets].sort((a, b) => String(b.weekStart).localeCompare(String(a.weekStart)))}
+                      empty="No weekly budgets prepared yet."
+                    />
+                  </Section>
+                </>
+              )}
+
+              {adminSubTab === "allowances" && (
+                <>
+                  <div style={{ display: "flex", gap: 16, marginBottom: 18, flexWrap: "wrap" }}>
+                    <StatCard label="Allocations" value={trainingAllowances.length} />
+                    <StatCard label="Total allocated" value={fmt(talAll)} />
+                    <StatCard label="Paid so far" value={fmt(talPaid)} sub={`Pending / unallocated: ${fmt(talAll - talPaid)}`} />
+                    <StatCard label={`This month (${currentMonth})`} value={trainingAllowances.filter((a) => a.month === currentMonth).length} sub="Active allocations" />
+                  </div>
+                  <Section title="Staff Monthly Training Allowance" action={
+                    <PrimaryButton onClick={() => setDrawer({ type: "trainingAllowance" })}><Plus size={14} style={{ verticalAlign: -2 }} /> Allocate Allowance</PrimaryButton>
+                  }>
+                    <p style={{ fontSize: 12.5, color: "#6b6552", marginTop: 0 }}>
+                      Allocate the monthly training allowance for staff and team members. One allocation per staff member per month.
+                    </p>
+                    <Table
+                      columns={[
+                        { key: "code", label: "Code" },
+                        { key: "staffName", label: "Staff" },
+                        { key: "staffCode", label: "Staff Code" },
+                        { key: "month", label: "Month" },
+                        { key: "amount", label: "Amount (MK)", render: (r) => fmt(r.amount) },
+                        { key: "status", label: "Status", render: (r) => <Badge tone={r.status === "Paid" ? "good" : r.status === "Allocated" ? "pending" : "muted"}>{r.status}</Badge> },
+                        { key: "notes", label: "Notes", render: (r) => r.notes || "—" },
+                        { key: "actions", label: "", render: (r) => (
+                          <RowActions
+                            onEdit={() => setDrawer({ type: "trainingAllowance", editing: r })}
+                            onDelete={canDelete(account) ? () => { if (window.confirm(`Delete allowance ${r.code}? This cannot be undone.`)) { setTrainingAllowances((prev) => prev.filter((a) => a.id !== r.id)); log("Deleted Training Allowance", "training_allowance", r.code, `${r.staffName} deleted by ${actor.code}`); } } : undefined}
+                          />
+                        ) },
+                      ]}
+                      rows={[...trainingAllowances].sort((a, b) => String(b.month).localeCompare(String(a.month)))}
+                      empty="No training allowances allocated yet."
+                    />
+                  </Section>
+                </>
+              )}
+            </>
+            );
+          })()}
 
           {tab === "finance" && (
             <>
@@ -5832,6 +6022,7 @@ function deleteAdjustment(code) {
                         counters, deptSeq,
                         players, hostelResidents, attendanceLog, incidents, foodSchedule,
                         trips, fuelLog, sponsors, risks, fixtures,
+                        playerTransfers, weeklyBudgets, trainingAllowances,
                       },
                     };
                     const blob = new Blob([JSON.stringify(backup, null, 2)], { type: "application/json" });
@@ -5884,6 +6075,9 @@ function deleteAdjustment(code) {
                           if (d.sponsors) setSponsors(d.sponsors);
                           if (d.risks) setRisks(d.risks);
                           if (d.fixtures) setFixtures(d.fixtures);
+                          if (d.playerTransfers) setPlayerTransfers(d.playerTransfers);
+                          if (d.weeklyBudgets) setWeeklyBudgets(d.weeklyBudgets);
+                          if (d.trainingAllowances) setTrainingAllowances(d.trainingAllowances);
                           if (persistTimer.current) clearTimeout(persistTimer.current);
                           alert("Backup restored. Applying and reloading…");
                           setTimeout(() => { if (flushRef.current) flushRef.current(); window.location.reload(); }, 60);
@@ -6037,6 +6231,21 @@ function deleteAdjustment(code) {
       {drawer?.type === "fixture" && <FixtureDrawer editing={drawer.editing} onClose={() => setDrawer(null)} onSubmit={(f) => {
         if (drawer.editing) { setFixtures((prev) => prev.map((x) => x.id === drawer.editing.id ? { ...x, ...f } : x)); log("Updated Fixture", "fixture", `${f.date} vs ${f.opponent}`, f.result || "Upcoming"); }
         else { setFixtures((prev) => [...prev, { id: Math.max(0, ...prev.map((x) => x.id)) + 1, ...f }]); log("Added Fixture", "fixture", `${f.date} vs ${f.opponent}`, "Scheduled"); }
+        setDrawer(null);
+      }} />}
+      {drawer?.type === "playerTransfer" && <PlayerTransferDrawer editing={drawer.editing} players={players} onClose={() => setDrawer(null)} onSubmit={(f) => {
+        if (drawer.editing) { setPlayerTransfers((prev) => prev.map((t) => t.id === drawer.editing.id ? { ...t, ...f } : t)); log("Updated Transfer", "transfer", drawer.editing.code, `${f.playerName} — ${f.direction}`); }
+        else { const code = `TRF-${String(playerTransfers.length + 1).padStart(3, "0")}`; setPlayerTransfers((prev) => [...prev, { id: Math.max(0, ...prev.map((t) => t.id)) + 1, code, ...f, createdBy: actor.code }]); log("Logged Transfer", "transfer", code, `${f.playerName} — ${f.direction} (${f.club})`); }
+        setDrawer(null);
+      }} />}
+      {drawer?.type === "weeklyBudget" && <WeeklyBudgetDrawer editing={drawer.editing} departments={seedDepartments} onClose={() => setDrawer(null)} onSubmit={(f) => {
+        if (drawer.editing) { setWeeklyBudgets((prev) => prev.map((w) => w.id === drawer.editing.id ? { ...w, ...f } : w)); log("Updated Weekly Budget", "weekly_budget", drawer.editing.code, `Week ${f.weekStart} — ${f.department}`); }
+        else { const code = `WKB-${String(weeklyBudgets.length + 1).padStart(3, "0")}`; setWeeklyBudgets((prev) => [...prev, { id: Math.max(0, ...prev.map((w) => w.id)) + 1, code, ...f, createdBy: actor.code, createdAt: todayISO() }]); log("Prepared Weekly Budget", "weekly_budget", code, `Week ${f.weekStart} — ${f.department}`); }
+        setDrawer(null);
+      }} />}
+      {drawer?.type === "trainingAllowance" && <TrainingAllowanceDrawer editing={drawer.editing} staff={staff} allowances={trainingAllowances} onClose={() => setDrawer(null)} onSubmit={(f) => {
+        if (drawer.editing) { setTrainingAllowances((prev) => prev.map((a) => a.id === drawer.editing.id ? { ...a, ...f } : a)); log("Updated Training Allowance", "training_allowance", drawer.editing.code, `${f.staffName} — ${f.month}`); }
+        else { const code = `TAL-${String(trainingAllowances.length + 1).padStart(3, "0")}`; setTrainingAllowances((prev) => [...prev, { id: Math.max(0, ...prev.map((a) => a.id)) + 1, code, ...f, createdBy: actor.code }]); log("Allocated Training Allowance", "training_allowance", code, `${f.staffName} — ${f.month} MK ${Number(f.amount) || 0}`); }
         setDrawer(null);
       }} />}
       </div>
@@ -6452,6 +6661,128 @@ function PlayerDrawer({ editing, onClose, setPlayers, account, players }) {
         else { setPlayers((prev) => [...prev, { id: Math.max(0, ...prev.map((p) => p.id)) + 1, ...f, salary: canSeeSalary ? Number(f.salary) || 0 : 0 }]); }
         onClose();
       }} disabled={!f.name || !f.shirtNo}>{editing ? "Save Changes" : "Register Player"}</PrimaryButton>
+    </Drawer>
+  );
+}
+
+function PlayerTransferDrawer({ editing, players, onClose, onSubmit }) {
+  const [f, setF] = useState(editing || { direction: "Incoming", playerName: "", club: "", date: todayISO(), fee: "", status: "Draft", notes: "" });
+  const [error, setError] = useState("");
+  const set = (k) => (e) => setF({ ...f, [k]: e.target.value });
+  return (
+    <Drawer title={editing ? `Edit Transfer — ${editing.code}` : "Log Player Transfer"} onClose={onClose}>
+      <Field label="Direction">
+        <select style={inputStyle} value={f.direction} onChange={set("direction")}>
+          <option>Incoming</option><option>Outgoing</option>
+        </select>
+      </Field>
+      <Field label="Player">
+        <input style={inputStyle} value={f.playerName} onChange={set("playerName")} list="transfer-player-list" placeholder="Select or type a registered player" />
+        <datalist id="transfer-player-list">
+          {players.map((p) => <option key={p.id} value={p.name} />)}
+        </datalist>
+      </Field>
+      <Field label="Counterpart Club"><input style={inputStyle} value={f.club} onChange={set("club")} placeholder={f.direction === "Incoming" ? "Club the player came from" : "Club signed the player"} /></Field>
+      <Field label="Date"><input type="date" style={inputStyle} value={f.date} onChange={set("date")} /></Field>
+      <Field label="Transfer Fee (MK)"><input type="number" style={inputStyle} value={f.fee} onChange={set("fee")} placeholder="Optional — 0 or leave blank" /></Field>
+      <Field label="Status">
+        <select style={inputStyle} value={f.status} onChange={set("status")}>
+          <option>Draft</option><option>Approved</option><option>Completed</option>
+        </select>
+      </Field>
+      <Field label="Notes"><textarea style={{ ...inputStyle, minHeight: 50 }} value={f.notes} onChange={set("notes")} placeholder="Optional notes" /></Field>
+      {error && <p style={{ color: T.bad, fontSize: 12.5, marginTop: -6 }}>{error}</p>}
+      <PrimaryButton onClick={() => {
+        setError("");
+        if (!f.playerName.trim()) { setError("Player name is required."); return; }
+        if (!f.club.trim()) { setError("Counterpart club is required."); return; }
+        if (!f.date) { setError("Transfer date is required."); return; }
+        if (f.fee !== "" && (!Number.isFinite(Number(f.fee)) || Number(f.fee) < 0)) { setError("Fee must be a valid non-negative number."); return; }
+        onSubmit({ ...f, playerName: f.playerName.trim(), club: f.club.trim(), fee: f.fee === "" ? 0 : Number(f.fee) || 0 });
+      }} disabled={!f.playerName || !f.club || !f.date}>{editing ? "Save Changes" : "Log Transfer"}</PrimaryButton>
+    </Drawer>
+  );
+}
+
+function WeeklyBudgetDrawer({ editing, departments, onClose, onSubmit }) {
+  const [f, setF] = useState(editing || { weekStart: todayISO(), department: "Club-wide", plannedIncome: "", items: [{ category: "", amount: "" }], status: "Draft", notes: "" });
+  const [error, setError] = useState("");
+  const set = (k) => (e) => setF({ ...f, [k]: e.target.value });
+  const setItem = (idx, k, v) => setF((prev) => ({ ...prev, items: prev.items.map((it, i) => i === idx ? { ...it, [k]: v } : it) }));
+  const addItem = () => setF((prev) => ({ ...prev, items: [...prev.items, { category: "", amount: "" }] }));
+  const removeItem = (idx) => setF((prev) => ({ ...prev, items: prev.items.filter((_, i) => i !== idx) }));
+  return (
+    <Drawer title={editing ? `Edit Weekly Budget — ${editing.code}` : "Prepare Weekly Budget"} onClose={onClose}>
+      <Field label="Week Starting (Monday)"><input type="date" style={inputStyle} value={f.weekStart} onChange={set("weekStart")} /></Field>
+      <Field label="Department">
+        <select style={inputStyle} value={f.department} onChange={set("department")}>
+          <option>Club-wide</option>
+          {departments.map((d) => <option key={d.code} value={d.name}>{d.name}</option>)}
+        </select>
+      </Field>
+      <Field label="Planned Income (MK)"><input type="number" style={inputStyle} value={f.plannedIncome} onChange={set("plannedIncome")} placeholder="Expected income for the week" /></Field>
+      <Field label="Planned Expenditure (by category)">
+        {f.items.map((it, idx) => (
+          <div key={idx} style={{ display: "flex", gap: 8, marginBottom: 8, alignItems: "center" }}>
+            <input style={{ ...inputStyle, flex: 1 }} value={it.category} placeholder="Category e.g. Transport, Kit, Food" onChange={(e) => setItem(idx, "category", e.target.value)} />
+            <input type="number" style={{ ...inputStyle, width: 130 }} value={it.amount} placeholder="Amount (MK)" onChange={(e) => setItem(idx, "amount", e.target.value)} />
+            <button onClick={() => removeItem(idx)} style={{ background: "none", border: "none", color: T.bad, cursor: "pointer", fontFamily: "Inter, sans-serif" }}>✕</button>
+          </div>
+        ))}
+        <GhostButton onClick={addItem}><Plus size={12} style={{ verticalAlign: -2 }} /> Add line item</GhostButton>
+      </Field>
+      <Field label="Status">
+        <select style={inputStyle} value={f.status} onChange={set("status")}>
+          <option>Draft</option><option>Approved</option>
+        </select>
+      </Field>
+      <Field label="Notes"><textarea style={{ ...inputStyle, minHeight: 50 }} value={f.notes} onChange={set("notes")} placeholder="Assumptions, key activities this week" /></Field>
+      {error && <p style={{ color: T.bad, fontSize: 12.5, marginTop: -6 }}>{error}</p>}
+      <PrimaryButton onClick={() => {
+        setError("");
+        if (!f.weekStart) { setError("Week starting date is required."); return; }
+        if (f.plannedIncome !== "" && (!Number.isFinite(Number(f.plannedIncome)) || Number(f.plannedIncome) < 0)) { setError("Planned income must be a valid non-negative number."); return; }
+        for (let i = 0; i < f.items.length; i++) {
+          const it = f.items[i];
+          if (!it.category.trim()) { setError(`Expense line ${i + 1} needs a category.`); return; }
+          if (!Number.isFinite(Number(it.amount)) || Number(it.amount) < 0) { setError(`Expense line ${i + 1} amount must be a valid non-negative number.`); return; }
+        }
+        onSubmit({ ...f, weekStart: f.weekStart, plannedIncome: Number(f.plannedIncome) || 0, items: f.items.map((it) => ({ category: it.category.trim(), amount: Number(it.amount) || 0 })) });
+      }} disabled={!f.weekStart}>{editing ? "Save Changes" : "Save Weekly Budget"}</PrimaryButton>
+    </Drawer>
+  );
+}
+
+function TrainingAllowanceDrawer({ editing, staff, allowances, onClose, onSubmit }) {
+  const [f, setF] = useState(editing || { staffCode: staff[0]?.code || "", month: todayISO().slice(0, 7), amount: "", status: "Allocated", notes: "" });
+  const [error, setError] = useState("");
+  const set = (k) => (e) => setF({ ...f, [k]: e.target.value });
+  const selStaff = staff.find((s) => s.code === f.staffCode);
+  return (
+    <Drawer title={editing ? `Edit Allowance — ${editing.code}` : "Allocate Monthly Training Allowance"} onClose={onClose}>
+      <Field label="Staff Member">
+        <select style={inputStyle} value={f.staffCode} onChange={set("staffCode")}>
+          {staff.map((s) => <option key={s.code} value={s.code}>{s.name} — {s.code}</option>)}
+        </select>
+      </Field>
+      <Field label="Month"><input type="month" style={inputStyle} value={f.month} onChange={set("month")} /></Field>
+      <Field label="Allowance Amount (MK)"><input type="number" style={inputStyle} value={f.amount} onChange={set("amount")} placeholder="e.g. 25000" /></Field>
+      <Field label="Status">
+        <select style={inputStyle} value={f.status} onChange={set("status")}>
+          <option>Allocated</option><option>Pending</option><option>Paid</option>
+        </select>
+      </Field>
+      <Field label="Notes"><textarea style={{ ...inputStyle, minHeight: 50 }} value={f.notes} onChange={set("notes")} placeholder="Optional notes" /></Field>
+      {error && <p style={{ color: T.bad, fontSize: 12.5, marginTop: -6 }}>{error}</p>}
+      <PrimaryButton onClick={() => {
+        setError("");
+        if (!f.staffCode) { setError("Select a staff member."); return; }
+        if (!f.month) { setError("Month is required."); return; }
+        if (!Number.isFinite(Number(f.amount)) || Number(f.amount) <= 0) { setError("Amount must be a valid number greater than zero."); return; }
+        const dup = allowances.find((a) => a.staffCode === f.staffCode && a.month === f.month && (!editing || a.id !== editing.id));
+        if (dup) { setError(`${selStaff?.name || f.staffCode} already has an allowance for ${f.month}.`); return; }
+        onSubmit({ ...f, staffName: (selStaff?.name || f.staffCode).trim(), amount: Number(f.amount) || 0 });
+      }} disabled={!f.staffCode || !f.month}>{editing ? "Save Changes" : "Allocate Allowance"}</PrimaryButton>
     </Drawer>
   );
 }
